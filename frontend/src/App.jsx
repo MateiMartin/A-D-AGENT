@@ -1,34 +1,54 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 
+const services = [
+  'Service 1',
+  // add more service names as needed
+]
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [files, setFiles] = useState([])
+  const [name, setName] = useState('')
+  const [tag, setTag] = useState(services[0])
+  const [content, setContent] = useState('')
+
+  const addFile = () => {
+    if (!name) return
+    setFiles([...files, { name, tag, content }])
+    setName('')
+    setContent('')
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app">
+      <h1>Simple IDE</h1>
+      <div className="controls">
+        <input
+          placeholder="File name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <select value={tag} onChange={(e) => setTag(e.target.value)}>
+          {services.map((svc) => (
+            <option key={svc} value={svc}>{svc}</option>
+          ))}
+        </select>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+      <textarea
+        placeholder="File contents"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+      />
+      <button onClick={addFile}>Add File</button>
+      <ul className="file-list">
+        {files.map((f, idx) => (
+          <li key={idx}>
+            <strong>{f.name}</strong> [{f.tag}]
+            <pre>{f.content}</pre>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

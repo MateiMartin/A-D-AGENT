@@ -1,14 +1,20 @@
 package config
 
-import (
-	"A-D-Agent/helper.go"  
-)
+import "A-D-Agent/helper"
 
-// SERVICE_1 represents a range of generated IP addresses
-var SERVICE_1 = helper.GenerateIPRange("10.10.%d.10", 1, 5) // This will create: ["10.10.1.10", "10.10.2.10", "10.10.3.10", "10.10.4.10", "10.10.5.10"]
-
-// SERVICE_ARRAY contains all service IP ranges
-var SERVICE_ARRAY = [][]string{
-	SERVICE_1,
+// Service represents a group of IPs that belong to a logical service.
+type Service struct {
+	Name string
+	IPs  []string
 }
 
+// Service1 represents a range of generated IP addresses
+var Service1 = Service{
+	Name: "Service 1",
+	IPs:  helper.GenerateIPRange("10.10.%d.10", 1, 5),
+}
+
+// SERVICES contains all service IP ranges with names
+var SERVICES = []Service{
+	Service1,
+}
