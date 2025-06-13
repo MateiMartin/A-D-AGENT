@@ -13,7 +13,6 @@ var Service1 = Service{
 	Name: "Service 1",
 	IPs:  helper.GenerateIPRange("10.10.%d.10", 1, 5),
 }
-
 // SERVICES contains all service IP ranges with names
 var SERVICES = []Service{
 	Service1,
