@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
@@ -136,7 +137,6 @@ func startPeriodicScans() {
 	go func() {
 		for {
 			fmt.Println("\n=== Starting new exploit run ===")
-					// Run the exploits
 			tmpDir := filepath.Join("tmp")
 			if err := os.MkdirAll(tmpDir, 0755); err != nil {
 				fmt.Printf("Error creating tmp directory: %v\n", err)
@@ -151,12 +151,28 @@ func startPeriodicScans() {
 					continue // Skip if exploit doesn't exist
 				}				
 				for _, ip := range service.IPs {
-					cmd := exec.Command(ad_agent.PYTHON_COMMAND, scriptPath, ip)
+					// Create a context with timeout
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					cmdStr := fmt.Sprintf("%s %s %s", ad_agent.PYTHON_COMMAND, scriptPath, ip)
 					fmt.Printf("\nExecuting: %s\n", cmdStr)
 					
+					cmd := exec.CommandContext(ctx, ad_agent.PYTHON_COMMAND, scriptPath, ip)
 					output, err := cmd.CombinedOutput()
-					// fmt.Printf("Response:\n%s\n", string(output)) // Response from the script
+					
+					if ctx.Err() == context.DeadlineExceeded {
+						fmt.Printf("Script timed out after 10 seconds\n")
+						fmt.Println("----------------------------------------")
+						cancel()
+						exploits = append(exploits, ExploitResult{
+							ServiceName: service.Name,
+							IP:         ip,
+							Output:     "Script execution timed out",
+							Error:      fmt.Errorf("timeout after 10 seconds"),
+						})
+						continue
+					}
+					cancel() // Clean up the context
+
 					if err != nil {
 						fmt.Printf("Error: %v\n", err)
 					}
@@ -171,7 +187,7 @@ func startPeriodicScans() {
 				}
 			}
 
-			// Filter excluded IPs
+			// Filter excluded IPs and process flags
 			for _, result := range exploits {
 				excluded := false
 				for _, excludedIP := range ad_agent.MYSERVICES_IPS {
