@@ -1,3 +1,3 @@
-module A-D-Agent
+module ad_agent
 
 go 1.24.4
