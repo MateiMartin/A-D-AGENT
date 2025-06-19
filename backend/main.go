@@ -27,6 +27,7 @@ type CodeResponse struct {
 
 type ServiceExploitRequest struct {
 	ServiceName string `json:"serviceName"`
+	FileName   string `json:"fileName"`
 	Code       string `json:"code"`
 }
 
@@ -119,9 +120,14 @@ func updateServiceExploits(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: "Failed to create temporary directory"})
 		return
 	}
+	// Validate file name
+	if request.FileName == "" {
+		c.JSON(http.StatusBadRequest, ServiceExploitResponse{Error: "File name is required"})
+		return
+	}
 
 	// Create or update the exploit file
-	filename := fmt.Sprintf("exploit_%s.py", request.ServiceName)
+	filename := fmt.Sprintf("exploit_%s_%s.py", request.ServiceName, request.FileName)
 	scriptPath := filepath.Join(tmpDir, filename)
 	if err := ioutil.WriteFile(scriptPath, []byte(request.Code), 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: "Failed to write exploit file"})
@@ -129,7 +135,7 @@ func updateServiceExploits(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ServiceExploitResponse{
-		Message: fmt.Sprintf("Successfully updated exploit for service: %s", request.ServiceName),
+		Message: fmt.Sprintf("Successfully updated exploit %s for service: %s", request.FileName, request.ServiceName),
 	})
 }
 
@@ -142,17 +148,29 @@ func startPeriodicScans() {
 				fmt.Printf("Error creating tmp directory: %v\n", err)
 				time.Sleep(ad_agent.TickerInterval)
 				continue
-			}
-
+			}			
 			var exploits []ExploitResult
 			for _, service := range ad_agent.SERVICES {
-				scriptPath := filepath.Join(tmpDir, fmt.Sprintf("exploit_%s.py", service.Name))
-				if _, err := os.Stat(scriptPath); err != nil {
-					continue // Skip if exploit doesn't exist
-				}				
-				for _, ip := range service.IPs {
+				// Find all exploit files for this service
+				files, err := filepath.Glob(filepath.Join(tmpDir, fmt.Sprintf("exploit_%s_*.py", service.Name)))
+				if err != nil {
+					fmt.Printf("Error finding exploit files for service %s: %v\n", service.Name, err)
+					continue
+				}
+				
+				if len(files) == 0 {
+					fmt.Printf("No exploit files found for service %s\n", service.Name)
+					continue
+				}
+
+				// Run each exploit file against all IPs
+				for _, scriptPath := range files {
+					exploitName := filepath.Base(scriptPath)
+					fmt.Printf("\n=== Running %s ===\n", exploitName)
+					
+					for _, ip := range service.IPs {
 					// Create a context with timeout
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					cmdStr := fmt.Sprintf("%s %s %s", ad_agent.PYTHON_COMMAND, scriptPath, ip)
 					fmt.Printf("\nExecuting: %s\n", cmdStr)
 					
@@ -160,14 +178,14 @@ func startPeriodicScans() {
 					output, err := cmd.CombinedOutput()
 					
 					if ctx.Err() == context.DeadlineExceeded {
-						fmt.Printf("Script timed out after 10 seconds\n")
+						fmt.Printf("Script timed out after 5 seconds\n")
 						fmt.Println("----------------------------------------")
 						cancel()
 						exploits = append(exploits, ExploitResult{
 							ServiceName: service.Name,
 							IP:         ip,
 							Output:     "Script execution timed out",
-							Error:      fmt.Errorf("timeout after 10 seconds"),
+							Error:      fmt.Errorf("timeout after 5 seconds"),
 						})
 						continue
 					}
@@ -182,8 +200,8 @@ func startPeriodicScans() {
 						ServiceName: service.Name,
 						IP:         ip,
 						Output:     string(output),
-						Error:      err,
-					})
+						Error:      err,					})
+					}
 				}
 			}
 

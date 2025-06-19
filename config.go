@@ -70,6 +70,6 @@ var PORT = "3333" // or any other port you prefer
 
 // Python command or alias
 
-var PYTHON_COMMAND = "python3" // or "python" depending on your system
+var PYTHON_COMMAND = "python" // or "python3" depending on your system
 
 
