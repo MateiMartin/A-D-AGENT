@@ -117,12 +117,11 @@ function App() {  // Load initial state from localStorage or use defaults
       alert(`A file named "${fileName}" already exists for service "${newServiceName}". Please choose a different name.`);
       return;
     }
-    
-    const newFile = {
+      const newFile = {
       id: Date.now(),
       name: fileName,
       service: newServiceName,
-      content: `import requests\nimport sys\n\nhost=sys.argv[1]\n\n# r=requests.get(f'http://{host}')\n\n# print(r.text) -> The output must contain the flag\n`
+      content: `import requests\nimport sys\n\nhost=sys.argv[1]\n\n# =============================================\n# ===== WRITE YOUR CODE BELOW THIS LINE =====\n# =============================================\n\n# Example code (you can modify or replace this):\n# r = requests.get(f'http://{host}')\n# print(r.text)  # The output should contain the flag\n`
     }
     setFiles([...files, newFile])
     setActiveFileId(newFile.id)

@@ -64,12 +64,10 @@ var FLAG_KEY string = "flags"
 // 1. A vscode like editor, each created file is associated with a service, and the user can write code in it. 
 // 2. A statistics dashboard that shows the status of each service, including the number of successful attacks, failed attacks, and the last attack time. 
 
-
-// PORT is the port on which the server will run
-var PORT = "3333" // or any other port you prefer
+//OpenAI api key
+var OPENAI_API_KEY = "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"
 
 // Python command or alias
-
 var PYTHON_COMMAND = "python" // or "python3" depending on your system
 
 

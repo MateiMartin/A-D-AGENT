@@ -303,3 +303,212 @@ body, html {
   cursor: not-allowed !important;
   background-color: #555 !important;
 }
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background-color: var(--bg-sidebar);
+  border-radius: 4px;
+  width: 90%;
+  max-width: 800px; /* Increased from 600px */
+  height: 80vh;     /* Set fixed height instead of max-height */
+  overflow-y: auto;
+  padding: 30px;    /* Increased from 20px */
+  position: relative;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: white;
+}
+
+.modal-form {
+  margin-top: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 8px 10px;
+  background-color: #3c3c3c;
+  border: 1px solid #3c3c3c;
+  color: white;
+  outline: none;
+  border-radius: 3px;
+}
+
+.modal-button {
+  padding: 8px 16px;
+  margin-top: 15px;
+  width: 100%;
+}
+
+.result-container {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  height: calc(80vh - 120px); /* Allow it to take most of the modal height */
+}
+
+.result-container h3 {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Ensure the output container takes available space */
+.result-container .code-output, 
+.result-container .code-error {
+  flex-grow: 1;
+}
+
+.code-output, .code-error {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 10px;
+  font-family: monospace;
+  white-space: pre;         /* Changed from pre-wrap to pre */
+  overflow-x: scroll;       /* Changed from auto to scroll to always show scrollbar */
+  margin: 10px 0;
+  max-height: 400px;        /* Increased from 300px */
+  overflow-y: auto;
+}
+
+.code-error {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+
+.service-info {
+  margin-bottom: 15px;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.result-header {
+  margin-bottom: 15px;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-description {
+  margin: 15px 0;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.apply-button {
+  background-color: #4caf50;
+}
+
+.apply-button:hover {
+  background-color: #45a049;
+}
+
+.secondary-button {
+  background-color: #555;
+}
+
+.secondary-button:hover {
+  background-color: #666;
+}
+
+.code-header-warning {
+  background-color: rgba(255, 140, 0, 0.1);
+  border-left: 3px solid #ff8c00;
+  padding: 10px;
+  margin: 10px 0;
+  color: #ffcc80;
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 3px;
+}
+
+.code-header-note {
+  background-color: rgba(100, 149, 237, 0.1);
+  border-left: 3px solid #6495ed;
+  padding: 8px 10px;
+  margin: 10px 0;
+  color: #a8c6ff;
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 3px;
+}

@@ -233,6 +233,17 @@ func startPeriodicScans() {
 	}()
 }
 
+// getAIAPIKey returns the OpenAI API key for the frontend to use
+// Returns a JSON object with the API key or an error if not set
+func getAIAPIKey(c *gin.Context) {
+	apiKey := ad_agent.OPENAI_API_KEY
+	if apiKey == "" {
+		c.JSON(500, gin.H{"error": "AI API key is not set"})
+		return
+	}
+	c.JSON(200, gin.H{"apiKey": apiKey})
+}
+
 func main() {
 	router := gin.Default()
 
@@ -253,11 +264,12 @@ func main() {
 
 	// Regular endpoints
 	router.GET("/services", getServices)
+	router.GET("/ai-api-key", getAIAPIKey)
 	router.POST("/run-code", runCode)
 	router.POST("/update-exploit", updateServiceExploits)
 
 	// Start periodic scanning in background
 	startPeriodicScans()
 
-	router.Run("localhost:"+ad_agent.PORT) // Use the PORT defined in ad_agent package
+	router.Run("localhost:3333")
 }
