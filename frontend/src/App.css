@@ -130,7 +130,8 @@ body, html {
   padding: 3px 8px 3px 20px;
   cursor: pointer;
   position: relative;
-  height: 28px;
+  min-height: 28px;
+  height: auto;
 }
 
 .file:hover {
@@ -146,8 +147,22 @@ body, html {
   font-size: 14px;
 }
 
-.file-name {
+.file-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-service {
+  font-size: 11px;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -185,6 +200,8 @@ body, html {
   height: 35px;
   background-color: var(--bg-primary);
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -214,4 +231,41 @@ body, html {
   align-items: center;
   height: 100%;
   color: var(--text-secondary);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding-right: 10px;
+  gap: 8px;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 3px;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.run-button {
+  background-color: #4caf50;
+}
+
+.run-button:hover {
+  background-color: #45a049;
+}
+
+.ai-button {
+  background-color: #7b2cbf;
+}
+
+.ai-button:hover {
+  background-color: #6a24a6;
 }
