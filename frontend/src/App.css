@@ -96,6 +96,22 @@ body, html {
   margin-bottom: 8px;
 }
 
+.service-select {
+  width: 100%;
+  padding: 6px 8px;
+  background-color: #3c3c3c;
+  border: 1px solid #3c3c3c;
+  color: white;
+  outline: none;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.service-select option {
+  background-color: #3c3c3c;
+  color: white;
+}
+
 .form-buttons {
   display: flex;
   gap: 8px;
@@ -268,4 +284,22 @@ body, html {
 
 .ai-button:hover {
   background-color: #6a24a6;
+}
+
+.duplicate-error {
+  border-color: #ff4d4f !important;
+  background-color: rgba(255, 77, 79, 0.1) !important;
+}
+
+.error-message {
+  color: #ff4d4f;
+  font-size: 11px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.button-disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  background-color: #555 !important;
 }

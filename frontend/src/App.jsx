@@ -1,15 +1,86 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Explorer from './components/Explorer'
 import CodeEditor from './components/CodeEditor'
 import './App.css'
 
-function App() {
-  const [files, setFiles] = useState([])
-  const [activeFileId, setActiveFileId] = useState(null)
+function App() {  // Load initial state from localStorage or use defaults
+  const [files, setFiles] = useState(() => {
+    try {
+      const savedFiles = localStorage.getItem('files');
+      return savedFiles ? JSON.parse(savedFiles) : [];
+    } catch (error) {
+      console.error('Error loading files from localStorage:', error);
+      return [];
+    }
+  })
+  const [services, setServices] = useState(() => {
+    try {
+      const savedServices = localStorage.getItem('services');
+      return savedServices ? JSON.parse(savedServices) : [];
+    } catch (error) {
+      console.error('Error loading services from localStorage:', error);
+      return [];
+    }
+  })
+  const [activeFileId, setActiveFileId] = useState(() => {
+    return localStorage.getItem('activeFileId') || null;
+  })
   const [newFileName, setNewFileName] = useState('')
-  const [newServiceName, setNewServiceName] = useState('')
+  const [newServiceName, setNewServiceName] = useState(() => {
+    return localStorage.getItem('newServiceName') || '';
+  })
   const [isCreatingFile, setIsCreatingFile] = useState(false)
-
+  // Load services from backend
+  useEffect(() => {
+    // Define a function to load services
+    const loadServices = async () => {
+      try {
+        const response = await fetch('http://localhost:3333/services');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Services loaded from API:', data);
+        
+        // Only update if we got valid data
+        if (data && Array.isArray(data)) {
+          setServices(data);
+          
+          // Set default service if needed
+          const storedServiceName = localStorage.getItem('newServiceName');
+          if (data.length > 0) {
+            if (!storedServiceName || storedServiceName === '') {
+              setNewServiceName(data[0]);
+            } else if (data.includes(storedServiceName)) {
+              // Make sure the stored service still exists
+              setNewServiceName(storedServiceName);
+            } else {
+              // If stored service no longer exists, use first available
+              setNewServiceName(data[0]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        // If we fail to load from API but have services in localStorage, we'll keep using those
+        const savedServices = localStorage.getItem('services');
+        if (savedServices && services.length === 0) {
+          try {
+            const parsedServices = JSON.parse(savedServices);
+            console.log('Using cached services from localStorage:', parsedServices);
+            setServices(parsedServices);
+          } catch (parseError) {
+            console.error('Error parsing services from localStorage:', parseError);
+          }
+        }
+      }
+    };
+    
+    // Call the function
+    loadServices();
+  }, []); // Empty dependency array so it only runs once on mount
   // Find the active file based on activeFileId
   const activeFile = files.find(file => file.id === activeFileId) || null
 
@@ -26,23 +97,41 @@ function App() {
   // Select a file to edit
   function selectFile(fileId) {
     setActiveFileId(fileId)
-  }
-  // Create a new file
+  }  // Create a new file
   function createFile() {
     if (!newFileName) return
+    if (!newServiceName) {
+      alert("You must select a service");
+      return;
+    }
     
     const fileName = newFileName.endsWith('.py') ? newFileName : `${newFileName}.py`
+    
+    // Check if a file with the same name already exists for the selected service
+    const duplicateFile = files.find(file => 
+      file.name.toLowerCase() === fileName.toLowerCase() && 
+      file.service === newServiceName
+    );
+    
+    if (duplicateFile) {
+      alert(`A file named "${fileName}" already exists for service "${newServiceName}". Please choose a different name.`);
+      return;
+    }
+    
     const newFile = {
       id: Date.now(),
       name: fileName,
       service: newServiceName,
       content: `import requests\nimport sys\n\nhost=sys.argv[1]\n\n# r=requests.get(f'http://{host}')\n\n# print(r.text) -> The output must contain the flag\n`
     }
-    
     setFiles([...files, newFile])
     setActiveFileId(newFile.id)
     setNewFileName('')
-    setNewServiceName('')
+    // Don't reset service name - keep the previously selected service
+    // Set default service if available
+    if (services && services.length > 0 && !newServiceName) {
+      setNewServiceName(services[0]);
+    }
     setIsCreatingFile(false)
   }
 
@@ -59,7 +148,44 @@ function App() {
     } else if (updatedFiles.length === 0) {
       setActiveFileId(null)
     }
-  }
+  }    // Save files to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('files', JSON.stringify(files));
+    } catch (error) {
+      console.error('Error saving files to localStorage:', error);
+    }
+  }, [files]);
+  // Save activeFileId to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (activeFileId) {
+        localStorage.setItem('activeFileId', activeFileId);
+      } else {
+        localStorage.removeItem('activeFileId');
+      }
+    } catch (error) {
+      console.error('Error saving activeFileId to localStorage:', error);
+    }
+  }, [activeFileId]);
+  // Save newServiceName to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('newServiceName', newServiceName);
+    } catch (error) {
+      console.error('Error saving newServiceName to localStorage:', error);
+    }
+  }, [newServiceName]);
+
+  // Save services to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('services', JSON.stringify(services));
+    } catch (error) {
+      console.error('Error saving services to localStorage:', error);
+    }
+  }, [services]);
+
   return (
     <div className="ide-container">
       <Explorer 
@@ -67,6 +193,7 @@ function App() {
         activeFileId={activeFileId}
         newFileName={newFileName}
         newServiceName={newServiceName}
+        services={services}
         isCreatingFile={isCreatingFile}
         onSelectFile={selectFile}
         onDeleteFile={deleteFile}

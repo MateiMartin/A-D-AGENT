@@ -6,6 +6,7 @@ function Explorer({
   activeFileId, 
   newFileName,
   newServiceName,
+  services,
   isCreatingFile, 
   onSelectFile, 
   onDeleteFile,
@@ -15,21 +16,25 @@ function Explorer({
   onToggleCreateFile 
 }) {
   return (
-    <div className="explorer">
-      <div className="explorer-header">
+    <div className="explorer">      <div className="explorer-header">
         <span>EXPLORER</span>
         <button 
-          className="new-file-button"
-          onClick={() => onToggleCreateFile(true)}
+          className="new-file-button"          onClick={() => {
+            // Ensure default service is selected when creating new file
+            if (services && services.length > 0 && !newServiceName) {
+              onServiceNameChange(services[0]);
+            }
+            onToggleCreateFile(true);
+          }}
         >
           +
         </button>
-      </div>
-
-      {isCreatingFile && (
+      </div>      {isCreatingFile && (
         <NewFileForm 
           fileName={newFileName}
           serviceName={newServiceName}
+          services={services}
+          files={files}
           onFileNameChange={onFileNameChange}
           onServiceNameChange={onServiceNameChange}
           onCreate={onCreateFile}
