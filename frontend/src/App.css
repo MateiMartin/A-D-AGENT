@@ -512,3 +512,85 @@ body, html {
   line-height: 1.4;
   border-radius: 3px;
 }
+
+.timeout-warning {
+  background-color: rgba(255, 69, 0, 0.15);
+  border: 1px solid rgba(255, 69, 0, 0.3);
+  border-left: 4px solid #ff4500;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 15px 0;
+  color: #ffa07a;
+  box-shadow: 0 2px 8px rgba(255, 69, 0, 0.15);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.timeout-warning h3 {
+  margin: 0 0 10px 0;
+  color: #ff6347;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.timeout-warning p {
+  margin: 5px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.timeout-suggestion {
+  margin-top: 10px !important;
+  font-style: italic;
+  padding-left: 15px;
+  border-left: 2px solid rgba(255, 99, 71, 0.5);
+}
+
+/* Execution Progress Bar */
+.execution-progress {
+  margin: 15px 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.progress-bar {
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #4caf50;
+  border-radius: 5px;
+  transition: width 0.1s ease-in-out, background-color 0.3s;
+}
+
+.progress-time {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.timeout-approaching {
+  color: #ff6347;
+  font-weight: 500;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}

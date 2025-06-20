@@ -83,22 +83,51 @@ function App() {  // Load initial state from localStorage or use defaults
   }, []); // Empty dependency array so it only runs once on mount
   // Find the active file based on activeFileId
   const activeFile = files.find(file => file.id === activeFileId) || null
-
-  // Save file content when it changes
-  function handleEditorChange(value) {
+  // Save file content when it changes and update the backend
+  async function handleEditorChange(value) {
     if (!activeFile) return
     
     const updatedFiles = files.map(file => 
       file.id === activeFileId ? { ...file, content: value } : file
     )
     setFiles(updatedFiles)
-  }
 
+    // Send update to backend
+    try {
+      const currentFile = updatedFiles.find(file => file.id === activeFileId);
+      
+      if (currentFile) {
+        const response = await fetch('http://localhost:3333/update-exploit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            serviceName: currentFile.service,
+            fileName: currentFile.name.replace(/\.py$/, ''), // Remove .py extension if present
+            code: currentFile.content
+          }),
+        });
+
+        const data = await response.json();
+          if (!response.ok) {
+          console.error('Error updating exploit on backend:', data.error || 'Unknown error');
+        } else {
+          console.log('Exploit updated successfully:', data.message);
+          console.log('File saved to project root tmp directory');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update exploit on backend:', err);
+    }
+  }
   // Select a file to edit
   function selectFile(fileId) {
     setActiveFileId(fileId)
-  }  // Create a new file
-  function createFile() {
+  }
+  
+  // Create a new file
+  async function createFile() {
     if (!newFileName) return
     if (!newServiceName) {
       alert("You must select a service");
@@ -117,27 +146,60 @@ function App() {  // Load initial state from localStorage or use defaults
       alert(`A file named "${fileName}" already exists for service "${newServiceName}". Please choose a different name.`);
       return;
     }
-      const newFile = {
+    const newFile = {
       id: Date.now(),
       name: fileName,
       service: newServiceName,
       content: `import requests\nimport sys\n\nhost=sys.argv[1]\n\n# =============================================\n# ===== WRITE YOUR CODE BELOW THIS LINE =====\n# =============================================\n\n# Example code (you can modify or replace this):\n# r = requests.get(f'http://{host}')\n# print(r.text)  # The output should contain the flag\n`
     }
+    
+    // Save locally
     setFiles([...files, newFile])
     setActiveFileId(newFile.id)
     setNewFileName('')
+    
+    // Send to backend
+    try {
+      const response = await fetch('http://localhost:3333/update-exploit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceName: newFile.service,
+          fileName: newFile.name.replace(/\.py$/, ''), // Remove .py extension if present
+          code: newFile.content
+        }),
+      });
+
+      const data = await response.json();
+        if (!response.ok) {
+        console.error('Error creating exploit on backend:', data.error || 'Unknown error');
+      } else {
+        console.log('Exploit created successfully:', data.message);
+        console.log('File saved to project root tmp directory');
+      }
+    } catch (err) {
+      console.error('Failed to create exploit on backend:', err);
+    }
+    
     // Don't reset service name - keep the previously selected service
     // Set default service if available
     if (services && services.length > 0 && !newServiceName) {
       setNewServiceName(services[0]);
-    }
-    setIsCreatingFile(false)
+    }    setIsCreatingFile(false)
   }
-
-  // Delete a file
-  function deleteFile(fileId, event) {
+  
+  // Delete a file  
+  async function deleteFile(fileId, event) {
     event.stopPropagation()
     
+    // Find the file to be deleted
+    const fileToDelete = files.find(file => file.id === fileId);
+    
+    if (!fileToDelete) return;
+    
+    // Update local state first
     const updatedFiles = files.filter(file => file.id !== fileId)
     setFiles(updatedFiles)
     
@@ -147,7 +209,34 @@ function App() {  // Load initial state from localStorage or use defaults
     } else if (updatedFiles.length === 0) {
       setActiveFileId(null)
     }
-  }    // Save files to localStorage whenever they change
+    
+    // Notify the backend to delete the file
+    try {
+      const response = await fetch('http://localhost:3333/update-exploit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceName: fileToDelete.service,
+          fileName: fileToDelete.name.replace(/\.py$/, ''), // Remove .py extension if present
+          code: '' // Empty code signals deletion on the backend
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error deleting exploit on backend:', data.error || 'Unknown error');
+      } else {
+        console.log('Exploit deleted successfully:', data.message);
+      }
+    } catch (err) {
+      console.error('Failed to delete exploit on backend:', err);
+    }
+  }
+  
+  // Save files to localStorage whenever they change
   useEffect(() => {
     try {
       localStorage.setItem('files', JSON.stringify(files));

@@ -59,27 +59,39 @@ func runCode(c *gin.Context) {
 	if err := c.BindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, CodeResponse{Error: "Invalid request format"})
 		return
-	}
-
-	// Create a temporary directory for the script
-	tmpDir := filepath.Join("tmp")
+	}	// Create a temporary directory at project root for the script
+	tmpDir := filepath.Join(projectRootPath, "tmp")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, CodeResponse{Error: "Failed to create temporary directory"})
+		c.JSON(http.StatusInternalServerError, CodeResponse{Error: "Failed to create temporary directory at project root"})
 		return
-	}
-
-	// Create temporary Python script file
+	}	// Create temporary Python script file in project root tmp directory
 	scriptPath := filepath.Join(tmpDir, "manul_run_script.py")
 	if err := ioutil.WriteFile(scriptPath, []byte(request.Code), 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, CodeResponse{Error: "Failed to write script file"})
 		return
-	}
-
-	// Execute the Python script with the IP address parameter
-	cmd := exec.Command(ad_agent.PYTHON_COMMAND, scriptPath, request.IpAddress)
+	}	// Execute the Python script with the IP address parameter and a 5-second timeout
+	// This prevents long-running scripts from blocking the server indefinitely
+	// The same timeout is used for both manual execution and periodic scanning
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel() // Ensure the cancel function is called to release resources
+	
+	cmd := exec.CommandContext(ctx, ad_agent.PYTHON_COMMAND, scriptPath, request.IpAddress)
 	output, err := cmd.CombinedOutput()
-
-	if err != nil {
+	if ctx.Err() == context.DeadlineExceeded {
+		fmt.Println("Manual script execution timed out after 5 seconds")
+		
+		// Kill the process if it's still running to prevent resource leaks
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		
+		// Return a timeout response immediately
+		c.JSON(http.StatusRequestTimeout, CodeResponse{
+			Output: "",  // Empty output since we don't want to display it
+			Error:  "Timeout: Script execution took longer than 5 seconds",
+		})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, CodeResponse{
 			Output: string(output),
 			Error:  fmt.Sprintf("Script execution failed: %v", err),
@@ -112,23 +124,43 @@ func updateServiceExploits(c *gin.Context) {
 	if !serviceExists {
 		c.JSON(http.StatusBadRequest, ServiceExploitResponse{Error: "Service not found"})
 		return
-	}
-
-	// Create tmp directory if it doesn't exist
-	tmpDir := filepath.Join("tmp")
+	}	// Create tmp directory at project root if it doesn't exist
+	tmpDir := filepath.Join(projectRootPath, "tmp")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: "Failed to create temporary directory"})
+		c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: "Failed to create temporary directory at project root"})
 		return
 	}
 	// Validate file name
 	if request.FileName == "" {
 		c.JSON(http.StatusBadRequest, ServiceExploitResponse{Error: "File name is required"})
 		return
-	}
-
-	// Create or update the exploit file
+	}	// Create, update, or delete the exploit file in project root tmp directory
 	filename := fmt.Sprintf("exploit_%s_%s.py", request.ServiceName, request.FileName)
 	scriptPath := filepath.Join(tmpDir, filename)
+	
+	if request.Code == "" {
+		// Empty code means delete the file
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			// File doesn't exist, nothing to delete
+			c.JSON(http.StatusOK, ServiceExploitResponse{
+				Message: fmt.Sprintf("Exploit %s for service: %s was already deleted", request.FileName, request.ServiceName),
+			})
+			return
+		}
+		
+		// Delete the file
+		if err := os.Remove(scriptPath); err != nil {
+			c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: fmt.Sprintf("Failed to delete exploit file: %v", err)})
+			return
+		}
+		
+		c.JSON(http.StatusOK, ServiceExploitResponse{
+			Message: fmt.Sprintf("Successfully deleted exploit %s for service: %s", request.FileName, request.ServiceName),
+		})
+		return
+	}
+	
+	// Create or update the file
 	if err := ioutil.WriteFile(scriptPath, []byte(request.Code), 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, ServiceExploitResponse{Error: "Failed to write exploit file"})
 		return
@@ -141,17 +173,15 @@ func updateServiceExploits(c *gin.Context) {
 
 func startPeriodicScans() {
 	go func() {
-		for {
-			fmt.Println("\n=== Starting new exploit run ===")
-			tmpDir := filepath.Join("tmp")
+		for {			fmt.Println("\n=== Starting new exploit run ===")
+			tmpDir := filepath.Join(projectRootPath, "tmp")
 			if err := os.MkdirAll(tmpDir, 0755); err != nil {
-				fmt.Printf("Error creating tmp directory: %v\n", err)
+				fmt.Printf("Error creating tmp directory at project root: %v\n", err)
 				time.Sleep(ad_agent.TickerInterval)
 				continue
-			}			
+			}
 			var exploits []ExploitResult
-			for _, service := range ad_agent.SERVICES {
-				// Find all exploit files for this service
+			for _, service := range ad_agent.SERVICES {				// Find all exploit files for this service in project root tmp directory
 				files, err := filepath.Glob(filepath.Join(tmpDir, fmt.Sprintf("exploit_%s_*.py", service.Name)))
 				if err != nil {
 					fmt.Printf("Error finding exploit files for service %s: %v\n", service.Name, err)
@@ -244,7 +274,49 @@ func getAIAPIKey(c *gin.Context) {
 	c.JSON(200, gin.H{"apiKey": apiKey})
 }
 
+// getProjectRootPath returns the absolute path to the project root
+// It handles different working directory scenarios
+func getProjectRootPath() string {
+	// If we've already calculated the path, return it
+	if projectRootPath != "" {
+		return projectRootPath
+	}
+	// Get current working directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		return ".." // Fallback to relative path
+	}
+
+	// Check if we're already at the project root
+	if filepath.Base(currentDir) == "A-D-AGENT" {
+		return currentDir
+	}
+
+	// If we're in the backend folder, go up one level
+	if filepath.Base(currentDir) == "backend" && filepath.Base(filepath.Dir(currentDir)) == "A-D-AGENT" {
+		return filepath.Dir(currentDir)
+	}
+
+	// Default to going up one level from backend
+	return filepath.Join(currentDir, "..")
+}
+
+// projectRootPath stores the absolute path to the project root
+// This is used to ensure exploit files are stored in the root tmp directory regardless of where the server is run from
+var projectRootPath string
+
 func main() {
+	// Set up the project root path for tmp directory
+	projectRootPath = getProjectRootPath()
+	fmt.Printf("Project root path: %s\n", projectRootPath)
+	
+	// Ensure the tmp directory exists at project root
+	tmpDir := filepath.Join(projectRootPath, "tmp")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		fmt.Printf("Error creating tmp directory at project root: %v\n", err)
+	}
+	
 	router := gin.Default()
 
 	// Enable CORS
