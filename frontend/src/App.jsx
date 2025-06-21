@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Explorer from './components/Explorer'
 import CodeEditor from './components/CodeEditor'
+import ConfirmationModal from './components/ConfirmationModal'
 import './App.css'
 
 function App() {  // Load initial state from localStorage or use defaults
@@ -30,6 +31,12 @@ function App() {  // Load initial state from localStorage or use defaults
     return localStorage.getItem('newServiceName') || '';
   })
   const [isCreatingFile, setIsCreatingFile] = useState(false)
+  // Add state for confirmation modal
+  const [confirmationModal, setConfirmationModal] = useState({
+    isOpen: false,
+    fileToDelete: null,
+    message: ''
+  });
   // Load services from backend
   useEffect(() => {
     // Define a function to load services
@@ -189,25 +196,37 @@ function App() {  // Load initial state from localStorage or use defaults
       setNewServiceName(services[0]);
     }    setIsCreatingFile(false)
   }
-  
-  // Delete a file  
+    // Delete a file  
   async function deleteFile(fileId, event) {
-    event.stopPropagation()
+    event.stopPropagation();
     
     // Find the file to be deleted
     const fileToDelete = files.find(file => file.id === fileId);
     
     if (!fileToDelete) return;
     
+    // Open confirmation modal instead of using native confirm
+    setConfirmationModal({
+      isOpen: true,
+      fileToDelete: fileToDelete,
+      message: `Are you sure you want to delete "${fileToDelete.name}" for service "${fileToDelete.service}"?`
+    });
+  }
+
+  // Handle confirmed deletion
+  async function handleConfirmDelete() {
+    const fileToDelete = confirmationModal.fileToDelete;
+    if (!fileToDelete) return;
+    
     // Update local state first
-    const updatedFiles = files.filter(file => file.id !== fileId)
-    setFiles(updatedFiles)
+    const updatedFiles = files.filter(file => file.id !== fileToDelete.id);
+    setFiles(updatedFiles);
     
     // If the deleted file was active, select another file
-    if (fileId === activeFileId && updatedFiles.length > 0) {
-      setActiveFileId(updatedFiles[0].id)
+    if (fileToDelete.id === activeFileId && updatedFiles.length > 0) {
+      setActiveFileId(updatedFiles[0].id);
     } else if (updatedFiles.length === 0) {
-      setActiveFileId(null)
+      setActiveFileId(null);
     }
     
     // Notify the backend to delete the file
@@ -234,8 +253,24 @@ function App() {  // Load initial state from localStorage or use defaults
     } catch (err) {
       console.error('Failed to delete exploit on backend:', err);
     }
+    
+    // Close the confirmation modal
+    setConfirmationModal({
+      isOpen: false,
+      fileToDelete: null,
+      message: ''
+    });
   }
-  
+
+  // Handle cancel delete
+  function handleCancelDelete() {
+    setConfirmationModal({
+      isOpen: false,
+      fileToDelete: null,
+      message: ''
+    });
+  }
+
   // Save files to localStorage whenever they change
   useEffect(() => {
     try {
@@ -297,6 +332,14 @@ function App() {  // Load initial state from localStorage or use defaults
           onContentChange={handleEditorChange}
         />
       </div>
+
+      {/* Add confirmation modal */}
+      <ConfirmationModal 
+        isOpen={confirmationModal.isOpen}
+        message={confirmationModal.message}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   )
 }

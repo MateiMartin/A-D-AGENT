@@ -594,3 +594,45 @@ body, html {
   50% { opacity: 1; }
   100% { opacity: 0.6; }
 }
+
+/* Confirmation Modal Styles */
+.confirmation-modal {
+  max-width: 450px;
+  height: auto;
+  padding: 25px;
+}
+
+.confirmation-message {
+  margin: 20px 0;
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.delete-button-confirm {
+  background-color: #d32f2f;
+}
+
+.delete-button-confirm:hover {
+  background-color: #b71c1c;
+}
+
+.cancel-button {
+  background-color: #424242;
+}
+
+.cancel-button:hover {
+  background-color: #616161;
+}
+
+/* Fade-in animation for modal */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-overlay {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Rest of existing styles... */

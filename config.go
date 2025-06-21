@@ -11,10 +11,8 @@ type Service struct {
 	IPs  []string
 }
 
-
 // Flag Regex
 const FLAG_REGEX = `CTF{[a-zA-Z0-9_]+}`
-
 
 // TickerInterval is the time between exploit runs, in seconds
 var TickerInterval = 10 * time.Second
@@ -43,6 +41,10 @@ var MYSERVICES_IPS = []string{
 }
 
 
+var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5
+// if > 5 will send the flags in chunks of 5 (or less if there are less than 5 flags to send) in a json array
+// if = 1 will send the flags one by one not in a json array
+
 /// SEND FALGS TO THE CHECKER
 var URL = "https://api.cyber-edu.co/v1/domain/rocsc25-ad/challenge/submit-ad-attempt"
 var HEADERS = map[string]string{
@@ -54,20 +56,11 @@ var HEADERS = map[string]string{
 
 var FLAG_KEY string = "flags"
 
-
-// To do: Requests to send flag via http with attributes
-// Create the rest api server to handle runnig scripts and send the attack to multiple hosts (multi threading).
-// The script must include host=sys.arg[1]  
-
-
-// The frontend will have 2 pages: 
-// 1. A vscode like editor, each created file is associated with a service, and the user can write code in it. 
-// 2. A statistics dashboard that shows the status of each service, including the number of successful attacks, failed attacks, and the last attack time. 
-
 //OpenAI api key
 var OPENAI_API_KEY = "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"
 
 // Python command or alias
 var PYTHON_COMMAND = "python" // or "python3" depending on your system
+
 
 
