@@ -46,12 +46,12 @@ var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5
 // if = 1 will send the flags one by one not in a json array
 
 /// SEND FALGS TO THE CHECKER
-var URL = "https://api.cyber-edu.co/v1/domain/rocsc25-ad/challenge/submit-ad-attempt"
+var URL = "http://localhost:8000/"
 var HEADERS = map[string]string{
         "Accept":       "application/json",
         "Content-Type": "application/json",
         // replace with your real session cookie
-        "Cookie":       "cyberedu_session=<your_session_cookie>;",
+        // "Cookie":       "cyberedu_session=<your_session_cookie>;",
     }
 
 var FLAG_KEY string = "flags"

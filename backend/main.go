@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
@@ -245,22 +247,217 @@ func startPeriodicScans() {
 					}
 				}
 				
-				if !excluded && result.Error == nil {
-					// Check for flags
+				if !excluded && result.Error == nil {					// Check for flags
 					flagRegex := regexp.MustCompile(ad_agent.FLAG_REGEX)
 					if flags := flagRegex.FindAllString(result.Output, -1); len(flags) > 0 {
 						fmt.Printf("Found flags from %s on IP %s: %v\n", result.ServiceName, result.IP, flags)
-						foundFlags = append(foundFlags, flags...)
+						
+						// Add flags to the array while preventing duplicates
+						for _, flag := range flags {
+							// Check if flag already exists in the array
+							flagExists := false
+							for _, existingFlag := range foundFlags {
+								if existingFlag == flag {
+									flagExists = true
+									break
+								}
+							}
+							
+							// Only add the flag if it doesn't already exist
+							if !flagExists {
+								fmt.Printf("Adding new unique flag: %s\n", flag)
+								foundFlags = append(foundFlags, flag)
+							} else {
+								fmt.Printf("Skipping duplicate flag: %s\n", flag)
+							}
+						}
 					}
 				}
-			}
-
-			fmt.Printf("\nAll found flags so far: %v\n", foundFlags)
+			}			// Report on the current state of flags
+			uniqueCount := len(deduplicateFlags(foundFlags))
+			fmt.Printf("\nCurrent unique flags in queue: %d\n", uniqueCount)
+			fmt.Println("Flags will be submitted automatically after the next submission interval")
 			fmt.Println("=== Completed exploit run ===\n")
 
 			time.Sleep(ad_agent.TickerInterval)
 		}
 	}()
+}
+
+// Start a background process to send flags periodically
+func startFlagSender(flagsRef *[]string) {
+	fmt.Println("Starting flag sender service...")
+	
+	// Define sending interval as TickerInterval + 20 seconds
+	sendingInterval := ad_agent.TickerInterval + (20 * time.Second)
+	fmt.Printf("Flag sending interval set to %v\n", sendingInterval)
+	
+	go func() {
+		// Initial delay to allow some flags to be collected first
+		time.Sleep(sendingInterval)
+		
+		for {
+			fmt.Println("=== Starting flag submission ===")
+			// Create a copy of the flags to avoid race conditions
+			currentFlags := make([]string, len(*flagsRef))
+			copy(currentFlags, *flagsRef)
+			
+			if len(currentFlags) > 0 {
+				fmt.Printf("Found %d flags to submit\n", len(currentFlags))
+				// Send the flags
+				success := sendFlagsToCheckSystem(currentFlags)
+				
+				// If flags were successfully sent, clear them from the main flags array
+				if success {
+					// Use a mutex to safely remove sent flags
+					fmt.Println("Flags successfully sent, removing them from the queue")
+					
+					// Create a new array with only flags that weren't in our sent batch
+					newFlags := make([]string, 0)
+					
+					// Build a map of sent flags for fast lookup
+					sentFlagsMap := make(map[string]bool)
+					for _, flag := range currentFlags {
+						sentFlagsMap[flag] = true
+					}
+					
+					// Add only flags that weren't sent to the new array
+					for _, flag := range *flagsRef {
+						if !sentFlagsMap[flag] {
+							newFlags = append(newFlags, flag)
+						}
+					}
+					
+					// Replace the current flags array with the new one
+					*flagsRef = newFlags
+					
+					fmt.Printf("Flags queue now contains %d flags\n", len(*flagsRef))
+				} else {
+					fmt.Println("Failed to send flags, they will be retried in the next cycle")
+				}
+			} else {
+				fmt.Println("No flags to submit at this time")
+			}
+			
+			fmt.Println("=== Flag submission complete ===")
+			// Wait for the next interval
+			time.Sleep(sendingInterval)
+		}
+	}()
+}
+
+// Function to send flags to the check system and return success status
+func sendFlagsToCheckSystem(flags []string) bool {
+	if len(flags) == 0 {
+		fmt.Println("No flags to send.")
+		return false
+	}
+	
+	// Deduplicate flags before sending
+	uniqueFlags := deduplicateFlags(flags)
+	fmt.Printf("Sending %d unique flags to the check system...\n", len(uniqueFlags))
+	
+	// Track if we successfully sent at least one flag or batch
+	successfullySent := false
+	
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	
+	// If NUMBER_OF_FLAGS_TO_SEND_AT_ONCE is greater than 1, send flags in batches
+	if ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE > 1 {
+		// Send flags in chunks
+		for i := 0; i < len(uniqueFlags); i += ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE {
+			end := i + ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE
+			if end > len(uniqueFlags) {
+				end = len(uniqueFlags)
+			}
+			
+			flagsChunk := uniqueFlags[i:end]
+			
+			// Prepare request body with flags array
+			reqBody := map[string][]string{
+				ad_agent.FLAG_KEY: flagsChunk,
+			}
+			
+			jsonData, err := json.Marshal(reqBody)
+			if err != nil {
+				fmt.Printf("Error marshaling JSON for flags chunk: %v\n", err)
+				continue
+			}
+			
+			// Send request to check system
+			req, err := http.NewRequest("POST", ad_agent.URL, bytes.NewBuffer(jsonData))
+			if err != nil {
+				fmt.Printf("Error creating request for flags chunk: %v\n", err)
+				continue
+			}
+			
+			// Add headers from config
+			for key, value := range ad_agent.HEADERS {
+				req.Header.Set(key, value)
+			}
+			
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Printf("Error sending flags chunk to check system: %v\n", err)
+				continue
+			}
+			
+			defer resp.Body.Close()
+			body, _ := ioutil.ReadAll(resp.Body)
+			
+			fmt.Printf("Sent flags chunk %d to %d. Response: %s\n", i+1, end, string(body))
+			
+			// If we got this far, consider it a successful submission
+			successfullySent = true
+		}
+	} else {
+		// Send flags one by one
+		for _, flag := range uniqueFlags {
+			// Prepare request body with single flag
+			reqBody := map[string]string{
+				ad_agent.FLAG_KEY: flag,
+			}
+			
+			jsonData, err := json.Marshal(reqBody)
+			if err != nil {
+				fmt.Printf("Error marshaling JSON for flag %s: %v\n", flag, err)
+				continue
+			}
+			
+			// Send request to check system
+			req, err := http.NewRequest("POST", ad_agent.URL, bytes.NewBuffer(jsonData))
+			if err != nil {
+				fmt.Printf("Error creating request for flag %s: %v\n", flag, err)
+				continue
+			}
+			
+			// Add headers from config
+			for key, value := range ad_agent.HEADERS {
+				req.Header.Set(key, value)
+			}
+			
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Printf("Error sending flag to check system: %v\n", err)
+				continue
+			}
+			
+			defer resp.Body.Close()
+			body, _ := ioutil.ReadAll(resp.Body)
+			
+			fmt.Printf("Sent flag: %s. Response: %s\n", flag, string(body))
+			
+			// If we got this far, consider it a successful submission
+			successfullySent = true
+			
+			// Add a small delay between individual flag submissions to not overwhelm the server
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	
+	return successfullySent
 }
 
 // getAIAPIKey returns the OpenAI API key for the frontend to use
@@ -306,6 +503,21 @@ func getProjectRootPath() string {
 // This is used to ensure exploit files are stored in the root tmp directory regardless of where the server is run from
 var projectRootPath string
 
+// Helper function to deduplicate flags
+func deduplicateFlags(flags []string) []string {
+	flagMap := make(map[string]bool)
+	for _, flag := range flags {
+		flagMap[flag] = true
+	}
+	
+	uniqueFlags := make([]string, 0, len(flagMap))
+	for flag := range flagMap {
+		uniqueFlags = append(uniqueFlags, flag)
+	}
+	
+	return uniqueFlags
+}
+
 func main() {
 	// Set up the project root path for tmp directory
 	projectRootPath = getProjectRootPath()
@@ -339,9 +551,11 @@ func main() {
 	router.GET("/ai-api-key", getAIAPIKey)
 	router.POST("/run-code", runCode)
 	router.POST("/update-exploit", updateServiceExploits)
-
 	// Start periodic scanning in background
 	startPeriodicScans()
+	
+	// Start flag sender in background
+	startFlagSender(&foundFlags)
 
 	router.Run("localhost:3333")
 }
