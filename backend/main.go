@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"ad_agent"
@@ -45,7 +46,124 @@ type ExploitResult struct {
 	Error      error
 }
 
+// Statistics structures
+type FlagStatistic struct {
+	IP          string `json:"ip"`
+	Service     string `json:"service"`
+	Flags       int    `json:"flags"`
+	LastCapture string `json:"lastCapture"`
+}
+
+type Event struct {
+	ID        int    `json:"id"`
+	Type      string `json:"type"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+	Service   string `json:"service"`
+}
+
+type StatisticsResponse struct {
+	FlagStats   []FlagStatistic `json:"flagStats"`
+	Events      []Event         `json:"events"`
+	TotalFlags  int             `json:"totalFlags"`
+}
+
 var foundFlags []string // All the found flags will be stored here
+var flagStatistics = make(map[string]*FlagStatistic) // Track flags by IP
+var recentEvents []Event // Store recent events
+var eventCounter int // Counter for event IDs
+
+// projectRootPath stores the absolute path to the project root
+// This is used to ensure exploit files are stored in the root tmp directory regardless of where the server is run from
+var projectRootPath string
+
+// Helper function to add an event
+func addEvent(eventType, message, service string) {
+	eventCounter++
+	event := Event{
+		ID:        eventCounter,
+		Type:      eventType,
+		Message:   message,
+		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+		Service:   service,
+	}
+	
+	// Add to the beginning of the slice and limit to 50 events
+	recentEvents = append([]Event{event}, recentEvents...)
+	if len(recentEvents) > 50 {
+		recentEvents = recentEvents[:50]
+	}
+	
+	fmt.Printf("Event added: %s - %s\n", eventType, message)
+}
+
+// Helper function to update flag statistics
+func updateFlagStatistics(ip, service string, flagCount int) {
+	if stat, exists := flagStatistics[ip]; exists {
+		stat.Flags += flagCount
+		stat.LastCapture = time.Now().Format("2006-01-02 15:04:05")
+	} else {
+		flagStatistics[ip] = &FlagStatistic{
+			IP:          ip,
+			Service:     service,
+			Flags:       flagCount,
+			LastCapture: time.Now().Format("2006-01-02 15:04:05"),
+		}
+	}
+}
+
+// Helper function to deduplicate flags
+func deduplicateFlags(flags []string) []string {
+	flagMap := make(map[string]bool)
+	for _, flag := range flags {
+		flagMap[flag] = true
+	}
+	
+	uniqueFlags := make([]string, 0, len(flagMap))
+	for flag := range flagMap {
+		uniqueFlags = append(uniqueFlags, flag)
+	}
+	
+	return uniqueFlags
+}
+
+// Helper function to check if response contains retryable error messages
+func containsRetryableError(response string) bool {
+	for _, errorMsg := range ad_agent.ERROR_MESSAGES {
+		if strings.Contains(response, errorMsg) {
+			return true
+		}
+	}
+	return false
+}
+
+// getProjectRootPath returns the absolute path to the project root
+// It handles different working directory scenarios
+func getProjectRootPath() string {
+	// If we've already calculated the path, return it
+	if projectRootPath != "" {
+		return projectRootPath
+	}
+	// Get current working directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		return ".." // Fallback to relative path
+	}
+
+	// Check if we're already at the project root
+	if filepath.Base(currentDir) == "A-D-AGENT" {
+		return currentDir
+	}
+
+	// If we're in the backend folder, go up one level
+	if filepath.Base(currentDir) == "backend" && filepath.Base(filepath.Dir(currentDir)) == "A-D-AGENT" {
+		return filepath.Dir(currentDir)
+	}
+
+	// Default to going up one level from backend
+	return filepath.Join(currentDir, "..")
+}
 
 func getServices(c *gin.Context) {
 	var names []string
@@ -213,6 +331,7 @@ func startPeriodicScans() {
 						fmt.Printf("Script timed out after 5 seconds\n")
 						fmt.Println("----------------------------------------")
 						cancel()
+						addEvent("exploit_timeout", fmt.Sprintf("Exploit timed out on %s", ip), service.Name)
 						exploits = append(exploits, ExploitResult{
 							ServiceName: service.Name,
 							IP:         ip,
@@ -225,6 +344,17 @@ func startPeriodicScans() {
 
 					if err != nil {
 						fmt.Printf("Error: %v\n", err)
+						addEvent("exploit_error", fmt.Sprintf("Exploit failed on %s: %v", ip, err), service.Name)
+					} else {
+						// Check if the output contains a flag before logging as successful
+						outputStr := string(output)
+						flagRegex := regexp.MustCompile(ad_agent.FLAG_REGEX)
+						if flagRegex.MatchString(outputStr) {
+							addEvent("exploit_success", fmt.Sprintf("Exploit successful on %s (flag found)", ip), service.Name)
+						} else {
+							// Exploit ran without error but no flag found - log as different event type
+							addEvent("exploit_completed", fmt.Sprintf("Exploit completed on %s (no flag found)", ip), service.Name)
+						}
 					}
 					fmt.Println("----------------------------------------")
 					
@@ -252,6 +382,9 @@ func startPeriodicScans() {
 					if flags := flagRegex.FindAllString(result.Output, -1); len(flags) > 0 {
 						fmt.Printf("Found flags from %s on IP %s: %v\n", result.ServiceName, result.IP, flags)
 						
+						// Count new flags for this IP
+						newFlagsCount := 0
+						
 						// Add flags to the array while preventing duplicates
 						for _, flag := range flags {
 							// Check if flag already exists in the array
@@ -267,8 +400,19 @@ func startPeriodicScans() {
 							if !flagExists {
 								fmt.Printf("Adding new unique flag: %s\n", flag)
 								foundFlags = append(foundFlags, flag)
+								newFlagsCount++
 							} else {
 								fmt.Printf("Skipping duplicate flag: %s\n", flag)
+							}
+						}
+						
+						// Update statistics and add events if new flags were found
+						if newFlagsCount > 0 {
+							updateFlagStatistics(result.IP, result.ServiceName, newFlagsCount)
+							if newFlagsCount == 1 {
+								addEvent("flag_captured", fmt.Sprintf("Flag captured from %s", result.IP), result.ServiceName)
+							} else {
+								addEvent("flag_captured", fmt.Sprintf("%d flags captured from %s", newFlagsCount, result.IP), result.ServiceName)
 							}
 						}
 					}
@@ -305,25 +449,38 @@ func startFlagSender(flagsRef *[]string) {
 			if len(currentFlags) > 0 {
 				fmt.Printf("Found %d flags to submit\n", len(currentFlags))
 				// Send the flags
-				success := sendFlagsToCheckSystem(currentFlags)
+				result := sendFlagsToCheckSystem(currentFlags)
 				
-				// If flags were successfully sent, clear them from the main flags array
-				if success {
-					// Use a mutex to safely remove sent flags
-					fmt.Println("Flags successfully sent, removing them from the queue")
+				// Process the results
+				if result.OverallSuccess || len(result.SuccessfullySent) > 0 {
+					fmt.Printf("Successfully sent %d flags, %d flags need retry\n", 
+						len(result.SuccessfullySent), len(result.RetryableFlags))
 					
-					// Create a new array with only flags that weren't in our sent batch
-					newFlags := make([]string, 0)
-					
-					// Build a map of sent flags for fast lookup
-					sentFlagsMap := make(map[string]bool)
-					for _, flag := range currentFlags {
-						sentFlagsMap[flag] = true
+					// Add event for successful flag submission
+					if len(result.SuccessfullySent) > 0 {
+						if len(result.SuccessfullySent) == 1 {
+							addEvent("flag_submitted", "1 flag submitted to checker", "System")
+						} else {
+							addEvent("flag_submitted", fmt.Sprintf("%d flags submitted to checker", len(result.SuccessfullySent)), "System")
+						}
 					}
 					
-					// Add only flags that weren't sent to the new array
+					// Create a new flags array with only flags that should be retried
+					// plus any new flags that weren't in our current batch
+					newFlags := make([]string, 0)
+					
+					// First add retryable flags
+					newFlags = append(newFlags, result.RetryableFlags...)
+					
+					// Build a map of flags that were in our current batch
+					currentFlagsMap := make(map[string]bool)
+					for _, flag := range currentFlags {
+						currentFlagsMap[flag] = true
+					}
+					
+					// Add flags that weren't in our current batch (newly collected flags)
 					for _, flag := range *flagsRef {
-						if !sentFlagsMap[flag] {
+						if !currentFlagsMap[flag] {
 							newFlags = append(newFlags, flag)
 						}
 					}
@@ -331,9 +488,10 @@ func startFlagSender(flagsRef *[]string) {
 					// Replace the current flags array with the new one
 					*flagsRef = newFlags
 					
-					fmt.Printf("Flags queue now contains %d flags\n", len(*flagsRef))
+					fmt.Printf("Flags queue now contains %d flags (%d retryable + %d new)\n", 
+						len(*flagsRef), len(result.RetryableFlags), len(*flagsRef)-len(result.RetryableFlags))
 				} else {
-					fmt.Println("Failed to send flags, they will be retried in the next cycle")
+					fmt.Println("Failed to send any flags, all will be retried in the next cycle")
 				}
 			} else {
 				fmt.Println("No flags to submit at this time")
@@ -346,11 +504,24 @@ func startFlagSender(flagsRef *[]string) {
 	}()
 }
 
-// Function to send flags to the check system and return success status
-func sendFlagsToCheckSystem(flags []string) bool {
+// FlagSubmissionResult holds the result of flag submission
+type FlagSubmissionResult struct {
+	SuccessfullySent  []string // Flags that were successfully sent and should be removed
+	RetryableFlags    []string // Flags that should be retried due to retryable errors
+	OverallSuccess    bool     // Whether the overall submission was successful
+}
+
+// Function to send flags to the check system and return detailed results
+func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
+	result := FlagSubmissionResult{
+		SuccessfullySent: make([]string, 0),
+		RetryableFlags:   make([]string, 0),
+		OverallSuccess:   false,
+	}
+	
 	if len(flags) == 0 {
 		fmt.Println("No flags to send.")
-		return false
+		return result
 	}
 	
 	// Deduplicate flags before sending
@@ -383,6 +554,8 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			jsonData, err := json.Marshal(reqBody)
 			if err != nil {
 				fmt.Printf("Error marshaling JSON for flags chunk: %v\n", err)
+				// Add all flags in this chunk to retryable flags
+				result.RetryableFlags = append(result.RetryableFlags, flagsChunk...)
 				continue
 			}
 			
@@ -390,6 +563,8 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			req, err := http.NewRequest("POST", ad_agent.URL, bytes.NewBuffer(jsonData))
 			if err != nil {
 				fmt.Printf("Error creating request for flags chunk: %v\n", err)
+				// Add all flags in this chunk to retryable flags
+				result.RetryableFlags = append(result.RetryableFlags, flagsChunk...)
 				continue
 			}
 			
@@ -401,16 +576,26 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			resp, err := client.Do(req)
 			if err != nil {
 				fmt.Printf("Error sending flags chunk to check system: %v\n", err)
+				// Add all flags in this chunk to retryable flags
+				result.RetryableFlags = append(result.RetryableFlags, flagsChunk...)
 				continue
 			}
 			
 			defer resp.Body.Close()
 			body, _ := ioutil.ReadAll(resp.Body)
+			response := string(body)
 			
-			fmt.Printf("Sent flags chunk %d to %d. Response: %s\n", i+1, end, string(body))
+			fmt.Printf("Sent flags chunk %d to %d. Response: %s\n", i+1, end, response)
 			
-			// If we got this far, consider it a successful submission
-			successfullySent = true
+			// Check if response contains retryable error messages
+			if containsRetryableError(response) {
+				fmt.Printf("Response contains retryable error, will retry flags: %v\n", flagsChunk)
+				result.RetryableFlags = append(result.RetryableFlags, flagsChunk...)
+			} else {
+				// Consider these flags successfully sent
+				result.SuccessfullySent = append(result.SuccessfullySent, flagsChunk...)
+				successfullySent = true
+			}
 		}
 	} else {
 		// Send flags one by one
@@ -423,6 +608,7 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			jsonData, err := json.Marshal(reqBody)
 			if err != nil {
 				fmt.Printf("Error marshaling JSON for flag %s: %v\n", flag, err)
+				result.RetryableFlags = append(result.RetryableFlags, flag)
 				continue
 			}
 			
@@ -430,6 +616,7 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			req, err := http.NewRequest("POST", ad_agent.URL, bytes.NewBuffer(jsonData))
 			if err != nil {
 				fmt.Printf("Error creating request for flag %s: %v\n", flag, err)
+				result.RetryableFlags = append(result.RetryableFlags, flag)
 				continue
 			}
 			
@@ -441,23 +628,33 @@ func sendFlagsToCheckSystem(flags []string) bool {
 			resp, err := client.Do(req)
 			if err != nil {
 				fmt.Printf("Error sending flag to check system: %v\n", err)
+				result.RetryableFlags = append(result.RetryableFlags, flag)
 				continue
 			}
 			
 			defer resp.Body.Close()
 			body, _ := ioutil.ReadAll(resp.Body)
+			response := string(body)
 			
-			fmt.Printf("Sent flag: %s. Response: %s\n", flag, string(body))
+			fmt.Printf("Sent flag: %s. Response: %s\n", flag, response)
 			
-			// If we got this far, consider it a successful submission
-			successfullySent = true
+			// Check if response contains retryable error messages
+			if containsRetryableError(response) {
+				fmt.Printf("Response contains retryable error, will retry flag: %s\n", flag)
+				result.RetryableFlags = append(result.RetryableFlags, flag)
+			} else {
+				// Consider this flag successfully sent
+				result.SuccessfullySent = append(result.SuccessfullySent, flag)
+				successfullySent = true
+			}
 			
 			// Add a small delay between individual flag submissions to not overwhelm the server
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
 	
-	return successfullySent
+	result.OverallSuccess = successfullySent
+	return result
 }
 
 // getAIAPIKey returns the OpenAI API key for the frontend to use
@@ -471,51 +668,23 @@ func getAIAPIKey(c *gin.Context) {
 	c.JSON(200, gin.H{"apiKey": apiKey})
 }
 
-// getProjectRootPath returns the absolute path to the project root
-// It handles different working directory scenarios
-func getProjectRootPath() string {
-	// If we've already calculated the path, return it
-	if projectRootPath != "" {
-		return projectRootPath
-	}
-	// Get current working directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
-		return ".." // Fallback to relative path
-	}
-
-	// Check if we're already at the project root
-	if filepath.Base(currentDir) == "A-D-AGENT" {
-		return currentDir
-	}
-
-	// If we're in the backend folder, go up one level
-	if filepath.Base(currentDir) == "backend" && filepath.Base(filepath.Dir(currentDir)) == "A-D-AGENT" {
-		return filepath.Dir(currentDir)
-	}
-
-	// Default to going up one level from backend
-	return filepath.Join(currentDir, "..")
-}
-
-// projectRootPath stores the absolute path to the project root
-// This is used to ensure exploit files are stored in the root tmp directory regardless of where the server is run from
-var projectRootPath string
-
-// Helper function to deduplicate flags
-func deduplicateFlags(flags []string) []string {
-	flagMap := make(map[string]bool)
-	for _, flag := range flags {
-		flagMap[flag] = true
+// getStatistics returns current flag statistics and recent events
+func getStatistics(c *gin.Context) {
+	// Convert map to slice for JSON response
+	var flagStats []FlagStatistic
+	totalFlags := 0
+	for _, stat := range flagStatistics {
+		flagStats = append(flagStats, *stat)
+		totalFlags += stat.Flags
 	}
 	
-	uniqueFlags := make([]string, 0, len(flagMap))
-	for flag := range flagMap {
-		uniqueFlags = append(uniqueFlags, flag)
+	response := StatisticsResponse{
+		FlagStats:  flagStats,
+		Events:     recentEvents,
+		TotalFlags: totalFlags,
 	}
 	
-	return uniqueFlags
+	c.JSON(http.StatusOK, response)
 }
 
 func main() {
@@ -549,6 +718,7 @@ func main() {
 	// Regular endpoints
 	router.GET("/services", getServices)
 	router.GET("/ai-api-key", getAIAPIKey)
+	router.GET("/statistics", getStatistics)
 	router.POST("/run-code", runCode)
 	router.POST("/update-exploit", updateServiceExploits)
 	// Start periodic scanning in background

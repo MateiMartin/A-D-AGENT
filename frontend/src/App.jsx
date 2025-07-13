@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Explorer from './components/Explorer'
 import CodeEditor from './components/CodeEditor'
+import Statistics from './components/Statistics'
 import ConfirmationModal from './components/ConfirmationModal'
 import './App.css'
 
@@ -36,6 +37,11 @@ function App() {  // Load initial state from localStorage or use defaults
     isOpen: false,
     fileToDelete: null,
     message: ''
+  });
+  
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('activeTab') || 'editor';
   });
   // Load services from backend
   useEffect(() => {
@@ -309,6 +315,15 @@ function App() {  // Load initial state from localStorage or use defaults
     }
   }, [services]);
 
+  // Save activeTab to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('activeTab', activeTab);
+    } catch (error) {
+      console.error('Error saving activeTab to localStorage:', error);
+    }
+  }, [activeTab]);
+
   return (
     <div className="ide-container">
       <Explorer 
@@ -326,11 +341,42 @@ function App() {  // Load initial state from localStorage or use defaults
         onToggleCreateFile={setIsCreatingFile}
       />
       
-      <div className="editor-container">
-        <CodeEditor 
-          file={activeFile}
-          onContentChange={handleEditorChange}
-        />
+      <div className="main-content">
+        {/* Tab Navigation */}
+        <div className="tab-navigation">
+          <button 
+            className={`tab-button ${activeTab === 'editor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('editor')}
+          >
+            <span className="tab-icon">📝</span>
+            Code Editor
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'statistics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('statistics')}
+          >
+            <span className="tab-icon">📊</span>
+            Statistics
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="tab-content">
+          {activeTab === 'editor' && (
+            <div className="editor-container">
+              <CodeEditor 
+                file={activeFile}
+                onContentChange={handleEditorChange}
+              />
+            </div>
+          )}
+          
+          {activeTab === 'statistics' && (
+            <div className="statistics-wrapper">
+              <Statistics />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add confirmation modal */}

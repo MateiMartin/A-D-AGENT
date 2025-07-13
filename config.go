@@ -56,6 +56,13 @@ var HEADERS = map[string]string{
 
 var FLAG_KEY string = "flags"
 
+// When the response from the check system contains one of these messages, the flag will not be eliminated from the array of flags to send and it will be retried in the next run
+var ERROR_MESSAGES = []string{
+	"Flag not found",
+	"Invalid flag format",
+	"Flag already submitted",
+}
+
 //OpenAI api key
 var OPENAI_API_KEY = "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"
 

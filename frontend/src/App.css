@@ -635,4 +635,85 @@ body, html {
   animation: fadeIn 0.2s ease-out;
 }
 
-/* Rest of existing styles... */
+/* Tab system styles */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.tab-navigation {
+  display: flex;
+  background-color: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-color);
+  min-height: 35px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  color: var(--text-primary);
+  background-color: var(--item-hover);
+}
+
+.tab-button.active {
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  border-bottom-color: var(--accent-color);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.statistics-wrapper {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Update existing editor container to work with new layout */
+.monaco-editor-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Responsive tab design */
+@media (max-width: 768px) {
+  .tab-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .tab-icon {
+    font-size: 12px;
+  }
+}
