@@ -19,7 +19,7 @@ function AIRewriteModal({ file, isOpen, onClose, onCodeUpdate }) {
     setError('');
     
     try {
-      const response = await fetch('http://localhost:3333/ai-api-key');
+      const response = await fetch('/api/ai-api-key');
       
       if (!response.ok) {
         throw new Error(`API key not available (${response.status})`);

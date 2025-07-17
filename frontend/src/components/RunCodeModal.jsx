@@ -60,7 +60,7 @@ function RunCodeModal({ file, isOpen, onClose }) {
         console.log("Fetch request aborted due to timeout");
       }, 6000); // Reduced from 7s to 6s
 
-      const response = await fetch('http://localhost:3333/run-code', {
+      const response = await fetch('/api/run-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

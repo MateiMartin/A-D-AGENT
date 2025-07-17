@@ -48,7 +48,7 @@ function App() {  // Load initial state from localStorage or use defaults
     // Define a function to load services
     const loadServices = async () => {
       try {
-        const response = await fetch('http://localhost:3333/services');
+        const response = await fetch('/api/services');
         
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
@@ -110,7 +110,7 @@ function App() {  // Load initial state from localStorage or use defaults
       const currentFile = updatedFiles.find(file => file.id === activeFileId);
       
       if (currentFile) {
-        const response = await fetch('http://localhost:3333/update-exploit', {
+        const response = await fetch('/api/update-exploit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

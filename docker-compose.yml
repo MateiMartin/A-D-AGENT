@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ad-agent:
+    build: .
+    ports:
+      - "1337:1337"
+    volumes:
+      # Mount flags.txt to host for persistence
+      - ./flags.txt:/app/flags.txt
+      # Mount tmp directory for exploit scripts (optional)
+      - ./tmp:/app/tmp
+    environment:
+      - GIN_MODE=release
+      - PORT=1337
+    restart: unless-stopped
+    container_name: ad-agent
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:1337/api/services"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

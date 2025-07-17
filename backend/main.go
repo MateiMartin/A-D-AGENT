@@ -137,6 +137,29 @@ func containsRetryableError(response string) bool {
 	return false
 }
 
+// Helper function to log flags to file
+func logFlagToFile(flag, ip, service string) {
+	// Open or create flags.txt file
+	file, err := os.OpenFile("flags.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Error opening flags.txt: %v\n", err)
+		return
+	}
+	defer file.Close()
+	
+	// Create log entry with timestamp
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("[%s] %s (from %s - %s)\n", timestamp, flag, ip, service)
+	
+	// Write to file
+	if _, err := file.WriteString(logEntry); err != nil {
+		fmt.Printf("Error writing flag to file: %v\n", err)
+		return
+	}
+	
+	fmt.Printf("Flag logged to flags.txt: %s\n", flag)
+}
+
 // getProjectRootPath returns the absolute path to the project root
 // It handles different working directory scenarios
 func getProjectRootPath() string {
@@ -401,6 +424,9 @@ func startPeriodicScans() {
 								fmt.Printf("Adding new unique flag: %s\n", flag)
 								foundFlags = append(foundFlags, flag)
 								newFlagsCount++
+								
+								// Log the flag to flags.txt file
+								logFlagToFile(flag, result.IP, result.ServiceName)
 							} else {
 								fmt.Printf("Skipping duplicate flag: %s\n", flag)
 							}
@@ -700,9 +726,9 @@ func main() {
 	
 	router := gin.Default()
 
-	// Enable CORS
+	// Enable CORS for all origins in Docker environment
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -715,17 +741,36 @@ func main() {
 		c.Next()
 	})
 
-	// Regular endpoints
-	router.GET("/services", getServices)
-	router.GET("/ai-api-key", getAIAPIKey)
-	router.GET("/statistics", getStatistics)
-	router.POST("/run-code", runCode)
-	router.POST("/update-exploit", updateServiceExploits)
+	// Serve static frontend files
+	router.Static("/static", "./frontend/dist/assets")
+	router.StaticFile("/", "./frontend/dist/index.html")
+	router.StaticFile("/index.html", "./frontend/dist/index.html")
+
+	// API endpoints with /api prefix
+	api := router.Group("/api")
+	{
+		api.GET("/services", getServices)
+		api.GET("/ai-api-key", getAIAPIKey)
+		api.GET("/statistics", getStatistics)
+		api.POST("/run-code", runCode)
+		api.POST("/update-exploit", updateServiceExploits)
+	}
+	
 	// Start periodic scanning in background
 	startPeriodicScans()
 	
 	// Start flag sender in background
 	startFlagSender(&foundFlags)
 
-	router.Run("localhost:3333")
+	// Get port from environment variable or default to 1337
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "1337"
+	}
+	
+	fmt.Printf("🚀 A-D-AGENT server starting on port %s\n", port)
+	fmt.Printf("🌐 Access the application at: http://localhost:%s\n", port)
+	fmt.Printf("🚩 Flags will be logged to: flags.txt\n")
+	
+	router.Run(":" + port)
 }

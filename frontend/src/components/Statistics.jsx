@@ -12,7 +12,7 @@ function Statistics() {
   const fetchStatistics = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:3333/statistics');
+      const response = await fetch('/api/statistics');
       if (response.ok) {
         const data = await response.json();
         setFlagStats(data.flagStats || []);
