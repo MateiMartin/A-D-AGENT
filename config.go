@@ -309,7 +309,7 @@ var ERROR_MESSAGES = []string{
 //   - Consider this when working with sensitive/proprietary exploits
 //   - Set to "" if you prefer not to use external AI services
 //
-var OPENAI_API_KEY = "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"
+var OPENAI_API_KEY = "sk-proj-api-key-example" // Replace with your actual OpenAI API key
 
 // ================================================================================
 // SYSTEM CONFIGURATION
