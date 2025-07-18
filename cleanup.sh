@@ -16,8 +16,9 @@ echo "🛑 Stopping all A-D-AGENT containers..."
 docker-compose down --remove-orphans --volumes
 
 echo "🗑️  Removing Docker images..."
+# Remove only A-D-AGENT related images
 docker rmi $(docker images "a-d-agent*" -q) 2>/dev/null || true
-docker image prune -f
+docker rmi $(docker images "*ad-agent*" -q) 2>/dev/null || true
 
 echo "📁 Backing up and clearing data files..."
 if [ -f "./flags.txt" ]; then
@@ -30,9 +31,6 @@ if [ -d "./tmp" ]; then
     echo "  - Cleared tmp directory"
 fi
 
-echo "🧽 Cleaning Docker system..."
-docker system prune -f
-
-echo ""
-echo "✅ Complete cleanup finished!"
+echo "🧽 A-D-AGENT cleanup complete!"
+echo "ℹ️  Note: Other Docker containers and images are preserved"
 echo "🚀 You can now run ./start.sh for a fresh start"

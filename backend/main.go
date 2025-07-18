@@ -741,8 +741,9 @@ func main() {
 		c.Next()
 	})
 
-	// Serve static frontend files
-	router.Static("/static", "./frontend/dist/assets")
+	// Serve static frontend files - match Vite's expected paths
+	router.Static("/assets", "./frontend/dist/assets")
+	router.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
 	router.StaticFile("/", "./frontend/dist/index.html")
 	router.StaticFile("/index.html", "./frontend/dist/index.html")
 

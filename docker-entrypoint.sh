@@ -11,6 +11,12 @@ echo "📁 Created flags.txt file for logging found flags"
 mkdir -p /app/tmp
 echo "📂 Created tmp directory for exploit scripts"
 
+# Debug: List the file structure
+echo "📋 File structure check:"
+echo "  - Frontend dist: $(ls -la /app/frontend/dist/ 2>/dev/null | wc -l) files"
+echo "  - Assets folder: $(ls -la /app/frontend/dist/assets/ 2>/dev/null | wc -l) files"
+echo "  - Backend binary: $(ls -la /app/backend/main 2>/dev/null && echo "✅ Found" || echo "❌ Missing")"
+
 # Start the backend server (which now serves both API and frontend)
 echo "🔧 Starting A-D-AGENT server on port 1337..."
 cd /app

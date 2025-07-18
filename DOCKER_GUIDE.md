@@ -31,13 +31,13 @@
 - **When to use**: Automatically called by Docker (you don't run this directly)
 
 ### `cleanup.sh` / `cleanup.bat` (Host Machine)
-- **Purpose**: Complete reset script for deep cleaning
+- **Purpose**: Safe cleanup script that only affects A-D-AGENT
 - **What it does**:
-  - Stops all containers and removes volumes
-  - Removes all Docker images related to A-D-AGENT
-  - Backs up and clears all data files
-  - Cleans Docker system cache
-- **When to use**: When you want to completely reset everything
+  - Stops A-D-AGENT containers and removes volumes
+  - Removes only A-D-AGENT Docker images
+  - Backs up and clears A-D-AGENT data files
+  - **Preserves other Docker containers and images**
+- **When to use**: When you want to reset A-D-AGENT without affecting other Docker projects
 
 ## Usage
 
@@ -46,7 +46,7 @@
 # Normal startup (recommended)
 ./start.sh
 
-# Complete reset (when needed)
+# Safe cleanup (A-D-AGENT only)
 ./cleanup.sh
 ./start.sh
 ```
@@ -56,7 +56,7 @@
 REM Normal startup (recommended)
 start.bat
 
-REM Complete reset (when needed)
+REM Safe cleanup (A-D-AGENT only)
 cleanup.bat
 start.bat
 ```

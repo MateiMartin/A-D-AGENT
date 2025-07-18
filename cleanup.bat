@@ -14,8 +14,9 @@ echo 🛑 Stopping all A-D-AGENT containers...
 docker-compose down --remove-orphans --volumes
 
 echo 🗑️  Removing Docker images...
+REM Remove only A-D-AGENT related images
 for /f "tokens=3" %%i in ('docker images ^| findstr "a-d-agent"') do docker rmi %%i 2>nul
-docker image prune -f
+for /f "tokens=3" %%i in ('docker images ^| findstr "ad-agent"') do docker rmi %%i 2>nul
 
 echo 📁 Backing up and clearing data files...
 if exist "flags.txt" (
@@ -30,9 +31,7 @@ if exist "tmp" (
     echo   - Cleared tmp directory
 )
 
-echo 🧽 Cleaning Docker system...
-docker system prune -f
-
 echo.
-echo ✅ Complete cleanup finished!
+echo ✅ A-D-AGENT cleanup finished!
+echo ℹ️  Note: Other Docker containers and images are preserved
 echo 🚀 You can now run start.bat for a fresh start

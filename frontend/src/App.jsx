@@ -173,7 +173,7 @@ function App() {  // Load initial state from localStorage or use defaults
     
     // Send to backend
     try {
-      const response = await fetch('http://localhost:3333/update-exploit', {
+      const response = await fetch('/api/update-exploit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -237,7 +237,7 @@ function App() {  // Load initial state from localStorage or use defaults
     
     // Notify the backend to delete the file
     try {
-      const response = await fetch('http://localhost:3333/update-exploit', {
+      const response = await fetch('/api/update-exploit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
