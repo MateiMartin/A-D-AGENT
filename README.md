@@ -117,31 +117,46 @@ var MYSERVICES_IPS = []string{
 
 ### 📤 **Flag Submission Configuration**
 
-```go
-// Flag submission endpoint
-var URL = "http://ctf-checker.example.com/submit"
+A-D-AGENT supports multiple flag submission methods to work with different CTF infrastructures:
 
-// HTTP headers for authentication
+```go
+// Choose submission method: "http", "netcat", or "both"
+var SUBMISSION_METHOD = "http"
+
+// HTTP Submission Configuration (when using "http" or "both")
+var URL = "http://ctf-checker.example.com/submit"
 var HEADERS = map[string]string{
     "Authorization": "Bearer your-token",
     "Content-Type":  "application/json",
     // Add session cookies, API keys, etc.
 }
+var FLAG_KEY = "flags"  // JSON key: {"flags": ["CTF{...}", "CTF{...}"]}
+var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5  // Batch size (HTTP only)
 
-// Batch vs single submission
-var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5  // Send 5 flags per request
-// Set to 1 for single flag submission
+// Netcat Submission Configuration (when using "netcat" or "both")
+var NETCAT_HOST = "10.10.10.1"      // Flag server IP/hostname
+var NETCAT_PORT = 9999               // Flag server port
+var NETCAT_TIMEOUT = 10              // Connection timeout (seconds)
+var NETCAT_FORMAT = "flag_newline"   // Format: "flag_only", "flag_newline", "submit_prefix", "json"
 
-// JSON key for flags in submission
-var FLAG_KEY = "flags"  // {"flags": ["CTF{...}", "CTF{...}"]}
-
-// Error messages that trigger retry (don't remove flags from queue)
+// Error messages that trigger retry (apply to both methods)
 var ERROR_MESSAGES = []string{
     "Rate limit exceeded",
-    "Temporary server error",
+    "Temporary server error", 
     "Database unavailable",
 }
 ```
+
+**Submission Method Options:**
+- **`"http"`**: Submit flags via HTTP/HTTPS requests (most common)
+- **`"netcat"`**: Submit flags via raw TCP connections (simple flag servers)
+- **`"both"`**: Submit using both methods for maximum reliability
+
+**Netcat Format Options:**
+- **`"flag_only"`**: Send just the flag: `CTF{example_flag}`
+- **`"flag_newline"`**: Send flag with newline: `CTF{example_flag}\n`
+- **`"submit_prefix"`**: Send with command: `submit CTF{example_flag}`
+- **`"json"`**: Send as JSON: `{"flag": "CTF{example_flag}"}`
 
 ### 🤖 **AI Integration (Optional)**
 
@@ -150,6 +165,55 @@ var ERROR_MESSAGES = []string{
 var OPENAI_API_KEY = "sk-your-openai-api-key-here"
 // Leave empty to disable AI features
 ```
+
+### 🔧 **Custom Flag Submission Scripts (Advanced)**
+
+For edge cases where the built-in HTTP and netcat submission methods don't meet your CTF's requirements, you can create custom scripts that read flags from `flags.txt`.
+
+**Simple Python Example:**
+
+```python
+#!/usr/bin/env python3
+import requests
+import time
+
+def read_new_flags(filename="flags.txt", last_position=0):
+    """Read only new flags since last check"""
+    try:
+        with open(filename, 'r') as f:
+            f.seek(last_position)
+            new_content = f.read()
+            new_position = f.tell()
+        
+        new_flags = [line.strip() for line in new_content.splitlines() if line.strip()]
+        return new_flags, new_position
+    except FileNotFoundError:
+        return [], 0
+
+def submit_custom_flag(flag):
+    """Your custom submission logic here"""
+    response = requests.post("https://your-ctf.com/custom-api", 
+                           json={"team": "your_team", "flag": flag},
+                           headers={"Authorization": "Bearer your-token"})
+    return response.status_code == 200
+
+# Main loop
+last_pos = 0
+while True:
+    new_flags, last_pos = read_new_flags(last_position=last_pos)
+    for flag in new_flags:
+        if submit_custom_flag(flag):
+            print(f"✅ Submitted: {flag}")
+        else:
+            print(f"❌ Failed: {flag}")
+    time.sleep(10)  # Check every 10 seconds
+```
+
+**Use Cases:**
+- Complex authentication (OAuth, SAML, multi-step auth)
+- Legacy systems (Telnet, SSH-based submission)  
+- Custom protocols or proprietary APIs
+- Integration with external tools (Slack, Discord bots)
 
 ## 📝 Creating and Managing Exploits
 
@@ -204,178 +268,171 @@ var OPENAI_API_KEY = "sk-your-openai-api-key-here"
 - Manual refresh button available
 - Persistent event history (last 50 events)
 
-## 📁 File Management
+## ⚙️ How A-D-AGENT Works
 
-### **Automatic Saving**
-- All code changes automatically sync to backend
-- Files stored in project's `tmp/` directory
-- Format: `exploit_{service}_{filename}.py`
+### **Automated Attack Cycle**
 
-### **Persistent Storage**
-- Exploits persist between application restarts
-- Flag data saved to `flags.txt` with timestamps
-- Configuration preserved in localStorage
+1. **Exploit Discovery**: Every 10 seconds (TickerInterval):
+   - Scan `tmp/` directory for Python exploit files
+   - Group exploits by service name (filename prefix)
+   - Load target IPs from service configuration
 
-### **File Operations**
-- **Create**: New files with service-specific templates
-- **Edit**: Real-time code editing with syntax highlighting
-- **Delete**: Safe deletion with confirmation dialogs
-- **Run**: Test individual exploits with custom targets
+2. **Concurrent Execution**: For each service:
+   - Run all exploits against all target IPs simultaneously
+   - 5-second timeout per exploit execution
+   - Capture stdout/stderr from each execution
 
-## 🔄 Automated Operation Flow
+3. **Flag Detection**: Every 30 seconds (TickerInterval + 20s):
+   - Apply FLAG_REGEX to all exploit outputs
+   - Deduplicate flags to prevent resubmission
+   - Log new flags to `flags.txt` for persistence
 
-1. **Continuous Scanning**: Every 10 seconds (configurable), A-D-AGENT:
-   - Finds all exploit files in `tmp/` directory
-   - Runs each exploit against all target IPs for its service
-   - Excludes your team's IPs from attacks
+4. **Flag Submission**: Submit captured flags via configured method:
+   - **HTTP**: Batch or individual submission with retry logic
+   - **Netcat**: Individual TCP connections per flag
+   - **Both**: Dual submission for maximum reliability
 
-2. **Flag Detection**: When an exploit runs:
-   - Output scanned for flag patterns using regex
-   - New flags added to internal queue
-   - Duplicates automatically filtered out
-   - Flags logged to `flags.txt` immediately
+### **Example Attack Flow**
 
-3. **Flag Submission**: Every 30 seconds (TickerInterval + 20s):
-   - Collects all queued flags
-   - Submits to configured checker endpoint
-   - Handles retry logic for temporary failures
-   - Removes successfully submitted flags from queue
+```
+Service1_exploit1.py  →  Target: 10.10.1.10  →  Output: "Found CTF{abc123}"
+Service1_exploit2.py  →  Target: 10.10.1.10  →  Output: "No response"
+Service1_exploit1.py  →  Target: 10.10.2.10  →  Output: "Error 404"
+Service2_database.py  →  Target: 192.168.1.1  →  Output: "CTF{xyz789}"
 
-4. **Statistics Updates**: Real-time tracking of:
-   - Flags captured per IP/service
-   - Exploit success/failure rates
-   - Event timeline with detailed logging
-
-## 🛠️ Management Commands
-
-### **Normal Operation**
-```bash
-# Start A-D-AGENT (includes automatic cleanup)
-./start.sh        # Linux/WSL
-start.bat         # Windows
+// Flag submission to CTF platform
+HTTP POST → {"flags": ["CTF{abc123}", "CTF{xyz789}"]} → ✅ Success
 ```
 
-### **Manual Cleanup**
-```bash
-# Clean up A-D-AGENT containers/data only
-./cleanup.sh      # Linux/WSL
-cleanup.bat       # Windows
-```
+## 🚀 Getting Started
 
-### **Debugging**
-```bash
-# View container logs
-docker logs ad-agent
+### **Quick Start for CTF Competition**
 
-# Access container shell
-docker exec -it ad-agent sh
+1. **Clone and Build**:
+   ```bash
+   git clone https://github.com/MateiMartin/A-D-AGENT.git
+   cd A-D-AGENT
+   ./start.sh  # or start.bat on Windows
+   ```
 
-# Check flag file
-cat flags.txt
+2. **Configure for Your CTF**:
+   ```bash
+   # Edit configuration for your environment
+   nano config.go
+   
+   # Key settings to change:
+   # - SERVICES: Target IP ranges and service definitions
+   # - URL: Flag submission endpoint
+   # - HEADERS: Authentication headers/cookies
+   # - FLAG_REGEX: CTF flag format
+   ```
 
-# Monitor exploit files
-ls -la tmp/
-```
+3. **Access A-D-AGENT**:
+   - Open http://localhost:1337 in your browser
+   - Start writing exploits in the web interface
+   - Monitor statistics and captured flags in real-time
 
-## 🎯 CTF Competition Usage
+### **Typical CTF Workflow**
 
-### **Pre-Competition Setup**
-1. Configure `config.go` with target IP ranges and flag format
-2. Set up flag submission endpoint and authentication
-3. Test with sample exploits to verify connectivity
-4. Deploy using `./start.sh`
-
-### **During Competition**
-1. Create exploits for each discovered service
-2. Test exploits using the "Run" feature
-3. Monitor statistics dashboard for success rates
-4. Watch event timeline for real-time activity
-5. Use AI rewrite to optimize slow or failing exploits
+1. **Reconnaissance**: Identify target services and vulnerabilities
+2. **Exploit Development**: Create Python exploits in A-D-AGENT interface
+3. **Testing**: Run exploits against specific targets to verify functionality
+4. **Deployment**: Save exploits - they'll run automatically every 10 seconds
+5. **Monitoring**: Watch statistics dashboard for flag capture and submission status
 
 ### **Flag Submission Strategy**
-- Flags automatically submitted every 30 seconds
-- Failed submissions retried on next cycle
-- All flags logged to `flags.txt` for backup
-- Statistics show submission success rates
+
+- **Continuous Operation**: Exploits run every 10 seconds automatically
+- **Deduplication**: Never submit the same flag twice
+- **Retry Logic**: Automatically retry failed submissions on temporary errors
+- **Multiple Methods**: Choose HTTP, netcat, or both for maximum compatibility
 
 ## 🔧 Advanced Configuration
 
-### **Custom Flag Patterns**
-```go
-// Multiple flag formats
-const FLAG_REGEX = `(CTF{[^}]+}|flag{[^}]+}|[A-F0-9]{32})`
-```
+### **Custom Service Definitions**
 
-### **Dynamic IP Ranges**
 ```go
-// Generate large IP ranges
-Service{
-    Name: "WebServers",
-    IPs:  helper.GenerateIPRange("172.16.%d.10", 1, 255), // 255 targets
+// Example: Multi-port service across many teams
+var WebServices = Service{
+    Name: "WebServices",
+    IPs: append(
+        helper.GenerateIPRange("10.10.%d.80", 1, 50),   // HTTP on teams 1-50
+        helper.GenerateIPRange("10.10.%d.443", 1, 50)... // HTTPS on teams 1-50
+    ),
+}
+
+// Example: Mixed infrastructure
+var MixedTargets = Service{
+    Name: "MixedTargets", 
+    IPs: []string{
+        "192.168.1.100",  // Legacy system
+        "172.16.1.50",    // Docker container
+        "10.0.0.200",     // Cloud instance
+    },
 }
 ```
 
-### **Complex Headers**
+### **Flag Format Examples**
+
 ```go
+// Standard formats
+const FLAG_REGEX = `CTF{[a-zA-Z0-9_]+}`           // CTF{flag_here}
+const FLAG_REGEX = `flag{[^}]+}`                   // flag{anything}
+const FLAG_REGEX = `[A-F0-9]{32}`                  // MD5 hash format
+const FLAG_REGEX = `(?i)flag_[a-z0-9]{16}`        // Case insensitive
+
+// Multiple formats (alternation)
+const FLAG_REGEX = `(CTF{[^}]+}|FLAG{[^}]+}|[A-Z0-9]{32})`
+```
+
+### **Submission Method Configuration**
+
+```go
+// HTTP-only submission (most common)
+var SUBMISSION_METHOD = "http"
+var URL = "https://ctf.example.com/submit" 
 var HEADERS = map[string]string{
-    "Authorization":     "Bearer " + os.Getenv("CTF_TOKEN"),
-    "X-Team-ID":        "team-123",
-    "User-Agent":       "A-D-AGENT/1.0",
-    "X-Submission-Key": "your-submission-key",
+    "Authorization": "Bearer your-token",
+    "Content-Type": "application/json",
 }
+
+// Netcat-only submission (simple flag servers)
+var SUBMISSION_METHOD = "netcat"
+var NETCAT_HOST = "10.10.10.1"
+var NETCAT_PORT = 9999
+var NETCAT_FORMAT = "flag_newline"
+
+// Dual submission (maximum reliability)
+var SUBMISSION_METHOD = "both"  // Submit via HTTP AND netcat
 ```
 
-## 🎮 Example CTF Scenario
+## 🐳 Docker & Deployment
 
-**Scenario**: CTF with 3 services across 50 teams (IP range 10.10.1-50.X)
+### **Container Features**
+- **Multi-stage build**: Optimized for production deployment
+- **Automatic restart**: Container automatically restarts on crashes
+- **Volume persistence**: Flags and exploits persist across container restarts
+- **Health checks**: Built-in health monitoring for container orchestration
+- **Network access**: Full network access for VPN-based CTFs
 
-```go
-// config.go setup
-var WebService = Service{
-    Name: "WebService",
-    IPs:  helper.GenerateIPRange("10.10.%d.80", 1, 50),
-}
+### **Production Deployment**
+```bash
+# Production deployment with persistence
+docker-compose up -d
 
-var DatabaseService = Service{
-    Name: "DatabaseService", 
-    IPs:  helper.GenerateIPRange("10.10.%d.3306", 1, 50),
-}
+# Monitor logs
+docker logs -f ad-agent
 
-var SSHService = Service{
-    Name: "SSHService",
-    IPs:  helper.GenerateIPRange("10.10.%d.22", 1, 50),
-}
+# Update configuration and restart
+nano config.go
+docker-compose restart
 
-// Your team is team 25
-var MYSERVICES_IPS = []string{
-    "10.10.25.80",   // Your web service
-    "10.10.25.3306", // Your database
-    "10.10.25.22",   // Your SSH service
-}
-
-// CTF-specific flag format
-const FLAG_REGEX = `DUCTF{[a-zA-Z0-9_]+}`
-
-// Flag submission to CTF platform
-var URL = "https://ctf.example.com/api/submit"
-var HEADERS = map[string]string{
-    "Authorization": "Bearer your-team-token",
-    "Content-Type":  "application/json",
-}
+# Backup flags and exploits
+docker cp ad-agent:/app/flags.txt ./backup_flags.txt
+docker cp ad-agent:/app/tmp ./backup_exploits
 ```
-
-**Result**: A-D-AGENT will automatically attack 147 targets (49 teams × 3 services) every 10 seconds, capture flags, and submit them to the CTF platform.
 
 ---
 
-## 🤝 Contributing
+**A-D-AGENT**: The ultimate automated Attack & Defense tool for CTF competitions! 🎯
 
-Contributions are welcome! Please read [DEVELOPMENT.md](DEVELOPMENT.md) for technical details about the codebase architecture.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-**Ready to dominate your next A-D CTF? Configure `config.go` and let A-D-AGENT do the heavy lifting while you focus on developing winning exploits! 🏆**

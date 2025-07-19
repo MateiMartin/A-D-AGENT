@@ -27,6 +27,7 @@ FROM python:3.11-alpine
 # Install runtime dependencies
 RUN apk add --no-cache \
     ca-certificates \
+    netcat-openbsd \
     && rm -rf /var/cache/apk/*
 
 # Create app directory

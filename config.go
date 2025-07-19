@@ -148,7 +148,22 @@ var MYSERVICES_IPS = []string{
 // FLAG SUBMISSION CONFIGURATION
 // ================================================================================
 
+// SUBMISSION_METHOD defines how flags are submitted to the CTF infrastructure.
+//
+// AVAILABLE METHODS:
+//   "http":    Submit flags via HTTP/HTTPS requests (most common)
+//   "netcat":  Submit flags via raw TCP connection using netcat
+//   "both":    Submit flags using both HTTP and netcat (for redundancy)
+//
+// EXAMPLES:
+//   "http"   - Standard web-based flag submission
+//   "netcat" - Raw TCP connection for simple flag servers  
+//   "both"   - Dual submission for maximum reliability
+//
+var SUBMISSION_METHOD = "http" // Options: "http", "netcat", "both"
+
 // NUMBER_OF_FLAGS_TO_SEND_AT_ONCE controls how flags are submitted to the checker.
+// NOTE: This only applies to HTTP submission. Netcat always sends one flag per connection.
 //
 // VALUES:
 //   1:    Send flags individually (one HTTP request per flag)
@@ -169,10 +184,10 @@ var MYSERVICES_IPS = []string{
 var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5
 
 // ================================================================================
-// CHECKER ENDPOINT CONFIGURATION
+// HTTP SUBMISSION CONFIGURATION
 // ================================================================================
 
-// URL is the endpoint where captured flags will be submitted.
+// URL is the endpoint where captured flags will be submitted via HTTP.
 // This should be provided by your CTF organizers.
 //
 // EXAMPLES:
@@ -181,6 +196,7 @@ var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5
 //   "https://scoreboard.ctf.com/api/flags"        // Custom scoreboard API
 //
 // IMPORTANT: Make sure this URL is correct and accessible from your container!
+// NOTE: Only used when SUBMISSION_METHOD is "http" or "both"
 var URL = "http://localhost:8000/"
 
 // HEADERS contains HTTP headers sent with each flag submission request.
@@ -205,6 +221,7 @@ var URL = "http://localhost:8000/"
 //     "Authorization": "Basic " + base64("username:password")
 //
 // IMPORTANT: Configure these headers according to your CTF platform's requirements!
+// NOTE: Only used when SUBMISSION_METHOD is "http" or "both"
 var HEADERS = map[string]string{
 	"Accept":       "application/json",
 	"Content-Type": "application/json",
@@ -225,7 +242,7 @@ var HEADERS = map[string]string{
 	// "Authorization": "Basic " + base64("username:password"),
 }
 
-// FLAG_KEY specifies the JSON key name used when submitting flags.
+// FLAG_KEY specifies the JSON key name used when submitting flags via HTTP.
 //
 // EXAMPLES:
 //   "flags":     {"flags": ["CTF{flag1}", "CTF{flag2}"]}           (most common)
@@ -234,7 +251,91 @@ var HEADERS = map[string]string{
 //   "tokens":    {"tokens": ["CTF{flag1}", "CTF{flag2}"]}         (custom naming)
 //
 // IMPORTANT: This must match what your CTF platform expects!
+// NOTE: Only used when SUBMISSION_METHOD is "http" or "both"
 var FLAG_KEY string = "flags"
+
+// ================================================================================
+// NETCAT SUBMISSION CONFIGURATION
+// ================================================================================
+
+// NETCAT_HOST is the hostname or IP address of the flag submission server.
+//
+// EXAMPLES:
+//   "10.10.10.1"        // CTF flag server IP
+//   "flag.ctf.example"  // CTF flag server hostname
+//   "localhost"         // Local testing server
+//
+// NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
+var NETCAT_HOST = "10.10.10.1"
+
+// NETCAT_PORT is the port number of the flag submission server.
+//
+// EXAMPLES:
+//   9999    // Common CTF flag submission port
+//   31337   // Alternative CTF port
+//   8080    // Standard web port for simple servers
+//   
+// NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
+var NETCAT_PORT = 9999
+
+// NETCAT_TIMEOUT defines how long to wait for netcat connections (in seconds).
+//
+// CONSIDERATIONS:
+//   - Too short (< 5s): May timeout on slow networks
+//   - Too long (> 30s): May block other flag submissions
+//   - Recommended: 10-15 seconds for most scenarios
+//
+// NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
+var NETCAT_TIMEOUT = 10
+
+// NETCAT_FORMAT defines how flags are formatted when sent via netcat.
+//
+// AVAILABLE FORMATS:
+//   "flag_only":     Send just the flag: "CTF{example_flag}"
+//   "flag_newline":  Send flag with newline: "CTF{example_flag}\n"
+//   "submit_prefix": Send with submit command: "submit CTF{example_flag}"
+//   "json":          Send as JSON: {"flag": "CTF{example_flag}"}
+//
+// EXAMPLES based on CTF requirements:
+//   Simple flag server:     "flag_newline"
+//   Command-based server:   "submit_prefix"  
+//   JSON API over TCP:      "json"
+//   Raw flag submission:    "flag_only"
+//
+// NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
+var NETCAT_FORMAT = "flag_newline"
+
+// ================================================================================
+// CUSTOM FLAG SUBMISSION (ADVANCED USERS)
+// ================================================================================
+
+// For edge cases where HTTP and netcat methods don't meet your CTF requirements,
+// you can create custom flag submission scripts that read from flags.txt.
+//
+// A-D-AGENT logs all captured flags to flags.txt in simple newline format:
+//   CTF{flag1}
+//   CTF{flag2}
+//   CTF{flag3}
+//
+// EXAMPLES OF CUSTOM REQUIREMENTS:
+//   - Complex authentication protocols (OAuth, SAML, multi-step auth)
+//   - Custom binary protocols or proprietary APIs
+//   - Telnet/SSH-based submission systems
+//   - Multi-stage submission (submit to queue, then confirm)
+//   - Integration with external tools (Slack, Discord, custom dashboards)
+//
+// IMPLEMENTATION APPROACHES:
+//   1. Python script reading flags.txt and submitting via custom protocol
+//   2. Sidecar container monitoring flags.txt with file system events
+//   3. External service polling flags.txt via mounted volume
+//
+// EXAMPLES:
+//   See README.md for complete Python implementation examples
+//   See DEVELOPMENT.md for technical integration patterns
+//
+// TO DISABLE BUILT-IN SUBMISSION (custom scripts only):
+//   Set SUBMISSION_METHOD = "http" and URL = "http://localhost:9999/disabled"
+//   This will cause HTTP submissions to fail, leaving only your custom script active
 
 // ================================================================================
 // RETRY LOGIC CONFIGURATION  

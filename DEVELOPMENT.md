@@ -136,27 +136,67 @@ func startPeriodicScans() {
 var foundFlags []string
 var flagStatistics = make(map[string]*FlagStatistic)
 
-// Flag submission with retry logic
+// Multi-method flag submission system
 func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
-    // Batch or individual submission based on config
+    switch ad_agent.SUBMISSION_METHOD {
+    case "http":
+        return sendFlagsViaHTTP(flags)
+    case "netcat":
+        return sendFlagsViaNetcat(flags)
+    case "both":
+        // Dual submission for maximum reliability
+        httpResult := sendFlagsViaHTTP(flags)
+        netcatResult := sendFlagsViaNetcat(flags)
+        return combineDualResults(httpResult, netcatResult)
+    }
+}
+
+// HTTP submission with batch support
+func sendFlagsViaHTTP(flags []string) FlagSubmissionResult {
     if ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE > 1 {
-        // Send in chunks
+        // Batch submission: {"flags": ["CTF{...}", "CTF{...}"]}
         for i := 0; i < len(flags); i += batchSize {
+            flagsChunk := flags[i:end]
+            reqBody := map[string][]string{ad_agent.FLAG_KEY: flagsChunk}
             // HTTP POST with JSON array
         }
     } else {
-        // Send individually
+        // Individual submission: {"flags": "CTF{...}"}
         for _, flag := range flags {
+            reqBody := map[string]string{ad_agent.FLAG_KEY: flag}
             // HTTP POST with single flag
         }
     }
-    
-    // Analyze response for retry logic
-    if containsRetryableError(response) {
-        // Keep flags in queue for next attempt
-    } else {
-        // Remove successfully submitted flags
+}
+
+// Netcat submission via raw TCP connections
+func sendFlagsViaNetcat(flags []string) FlagSubmissionResult {
+    for _, flag := range flags {
+        // Establish TCP connection
+        conn, err := net.DialTimeout("tcp", address, timeout)
+        
+        // Format flag according to configuration
+        switch ad_agent.NETCAT_FORMAT {
+        case "flag_only":     flagData = flag
+        case "flag_newline":  flagData = flag + "\n"
+        case "submit_prefix": flagData = "submit " + flag + "\n"
+        case "json":          flagData = `{"flag": "` + flag + `"}` + "\n"
+        }
+        
+        // Send flag and read response
+        conn.Write([]byte(flagData))
+        conn.Read(buffer)
     }
+}
+
+// Intelligent retry logic for both methods
+func containsRetryableError(response string) bool {
+    for _, errorMsg := range ad_agent.ERROR_MESSAGES {
+        if strings.Contains(response, errorMsg) {
+            return true // Keep flags in queue for next attempt
+        }
+    }
+    return false // Remove successfully submitted flags
 }
 ```
 
@@ -198,6 +238,52 @@ func addEvent(eventType, message, service string) {
 - **Error Handling**: Comprehensive error handling with proper HTTP status codes
 - **Configuration Integration**: Seamless integration with `config.go` settings
 - **Resource Management**: Proper cleanup of processes and contexts
+
+### **Custom Flag Submission Integration**
+
+For complex CTF platforms requiring custom submission protocols, A-D-AGENT provides simple integration points:
+
+#### **1. Flag File Access**
+
+```go
+// A-D-AGENT writes all captured flags to flags.txt in simple format:
+// CTF{flag1}
+// CTF{flag2}
+// CTF{flag3}
+func logFlagToFile(flag string) {
+    file, err := os.OpenFile("flags.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        fmt.Printf("Error opening flags file: %v\n", err)
+        return
+    }
+    defer file.Close()
+    file.WriteString(fmt.Sprintf("%s\n", flag))
+}
+```
+
+#### **2. Simple Custom Script Example**
+
+```python
+# Read new flags and submit via custom protocol
+def read_new_flags(filename="flags.txt", last_position=0):
+    try:
+        with open(filename, 'r') as f:
+            f.seek(last_position)
+            new_content = f.read()
+            new_position = f.tell()
+        new_flags = [line.strip() for line in new_content.splitlines() if line.strip()]
+        return new_flags, new_position
+    except FileNotFoundError:
+        return [], 0
+
+# Your custom submission logic
+def submit_custom_flag(flag):
+    # Insert your custom submission protocol here
+    return requests.post("https://your-ctf.com/api", 
+                        json={"flag": flag, "team": "your_team"}).status_code == 200
+```
+
+This approach allows complete customization while leveraging A-D-AGENT's flag detection and logging capabilities.
 
 ## ⚛️ Frontend Architecture (React)
 

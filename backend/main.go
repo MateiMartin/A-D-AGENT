@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"strconv"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
 	"net/http"
@@ -537,6 +539,108 @@ type FlagSubmissionResult struct {
 	OverallSuccess    bool     // Whether the overall submission was successful
 }
 
+// sendFlagViaNetcat sends a single flag via netcat/TCP connection
+func sendFlagViaNetcat(flag string) error {
+	// Create connection string
+	address := net.JoinHostPort(ad_agent.NETCAT_HOST, strconv.Itoa(ad_agent.NETCAT_PORT))
+	
+	// Set up connection with timeout
+	conn, err := net.DialTimeout("tcp", address, time.Duration(ad_agent.NETCAT_TIMEOUT)*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %v", address, err)
+	}
+	defer conn.Close()
+	
+	// Set write deadline
+	conn.SetWriteDeadline(time.Now().Add(time.Duration(ad_agent.NETCAT_TIMEOUT) * time.Second))
+	
+	// Format flag according to configuration
+	var flagData string
+	switch ad_agent.NETCAT_FORMAT {
+	case "flag_only":
+		flagData = flag
+	case "flag_newline":
+		flagData = flag + "\n"
+	case "submit_prefix":
+		flagData = "submit " + flag + "\n"
+	case "json":
+		jsonData := map[string]string{"flag": flag}
+		jsonBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal flag to JSON: %v", err)
+		}
+		flagData = string(jsonBytes) + "\n"
+	default:
+		flagData = flag + "\n" // Default to flag_newline
+	}
+	
+	// Send flag data
+	_, err = conn.Write([]byte(flagData))
+	if err != nil {
+		return fmt.Errorf("failed to send flag data: %v", err)
+	}
+	
+	// Read response (optional, with short timeout)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err == nil && n > 0 {
+		response := strings.TrimSpace(string(buffer[:n]))
+		fmt.Printf("Netcat response for flag %s: %s\n", flag, response)
+		
+		// Check if response contains retryable error
+		if containsRetryableError(response) {
+			return fmt.Errorf("retryable error in response: %s", response)
+		}
+	}
+	
+	return nil
+}
+
+// sendFlagsViaNetcat sends multiple flags via netcat (one connection per flag)
+func sendFlagsViaNetcat(flags []string) FlagSubmissionResult {
+	result := FlagSubmissionResult{
+		SuccessfullySent: make([]string, 0),
+		RetryableFlags:   make([]string, 0),
+		OverallSuccess:   false,
+	}
+	
+	if len(flags) == 0 {
+		fmt.Println("No flags to send via netcat.")
+		return result
+	}
+	
+	fmt.Printf("Sending %d flags via netcat to %s:%d...\n", len(flags), ad_agent.NETCAT_HOST, ad_agent.NETCAT_PORT)
+	
+	successCount := 0
+	
+	for _, flag := range flags {
+		err := sendFlagViaNetcat(flag)
+		if err != nil {
+			fmt.Printf("Failed to send flag %s via netcat: %v\n", flag, err)
+			// Check if it's a retryable error
+			if strings.Contains(err.Error(), "retryable error") || 
+			   strings.Contains(err.Error(), "connection refused") ||
+			   strings.Contains(err.Error(), "timeout") {
+				result.RetryableFlags = append(result.RetryableFlags, flag)
+			}
+			// Non-retryable errors are silently dropped (considered "sent" to avoid infinite retry)
+		} else {
+			fmt.Printf("Successfully sent flag via netcat: %s\n", flag)
+			result.SuccessfullySent = append(result.SuccessfullySent, flag)
+			successCount++
+		}
+		
+		// Small delay between netcat connections to avoid overwhelming the server
+		time.Sleep(100 * time.Millisecond)
+	}
+	
+	result.OverallSuccess = successCount > 0
+	fmt.Printf("Netcat submission completed: %d successful, %d retryable\n", successCount, len(result.RetryableFlags))
+	
+	return result
+}
+
 // Function to send flags to the check system and return detailed results
 func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
 	result := FlagSubmissionResult{
@@ -552,7 +656,84 @@ func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
 	
 	// Deduplicate flags before sending
 	uniqueFlags := deduplicateFlags(flags)
-	fmt.Printf("Sending %d unique flags to the check system...\n", len(uniqueFlags))
+	fmt.Printf("Sending %d unique flags using method: %s\n", len(uniqueFlags), ad_agent.SUBMISSION_METHOD)
+	
+	// Handle different submission methods
+	switch ad_agent.SUBMISSION_METHOD {
+	case "http":
+		return sendFlagsViaHTTP(uniqueFlags)
+	case "netcat":
+		return sendFlagsViaNetcat(uniqueFlags)
+	case "both":
+		// Send via both methods
+		fmt.Println("Sending flags via both HTTP and netcat...")
+		
+		// Try HTTP first
+		httpResult := sendFlagsViaHTTP(uniqueFlags)
+		
+		// Then try netcat
+		netcatResult := sendFlagsViaNetcat(uniqueFlags)
+		
+		// Combine results - a flag is successfully sent if either method succeeded
+		combinedResult := FlagSubmissionResult{
+			SuccessfullySent: make([]string, 0),
+			RetryableFlags:   make([]string, 0),
+			OverallSuccess:   false,
+		}
+		
+		// Create sets for easier processing
+		httpSuccess := make(map[string]bool)
+		netcatSuccess := make(map[string]bool)
+		httpRetry := make(map[string]bool)
+		netcatRetry := make(map[string]bool)
+		
+		for _, flag := range httpResult.SuccessfullySent {
+			httpSuccess[flag] = true
+		}
+		for _, flag := range netcatResult.SuccessfullySent {
+			netcatSuccess[flag] = true
+		}
+		for _, flag := range httpResult.RetryableFlags {
+			httpRetry[flag] = true
+		}
+		for _, flag := range netcatResult.RetryableFlags {
+			netcatRetry[flag] = true
+		}
+		
+		// Process each flag
+		for _, flag := range uniqueFlags {
+			if httpSuccess[flag] || netcatSuccess[flag] {
+				// At least one method succeeded
+				combinedResult.SuccessfullySent = append(combinedResult.SuccessfullySent, flag)
+			} else if httpRetry[flag] || netcatRetry[flag] {
+				// At least one method wants to retry
+				combinedResult.RetryableFlags = append(combinedResult.RetryableFlags, flag)
+			}
+			// If both methods failed without retry, flag is dropped
+		}
+		
+		combinedResult.OverallSuccess = len(combinedResult.SuccessfullySent) > 0
+		
+		fmt.Printf("Combined submission result: %d successful, %d retryable\n", 
+			len(combinedResult.SuccessfullySent), len(combinedResult.RetryableFlags))
+		
+		return combinedResult
+		
+	default:
+		fmt.Printf("Unknown submission method: %s, defaulting to HTTP\n", ad_agent.SUBMISSION_METHOD)
+		return sendFlagsViaHTTP(uniqueFlags)
+	}
+}
+
+// sendFlagsViaHTTP sends flags using HTTP/HTTPS requests (original implementation)
+func sendFlagsViaHTTP(flags []string) FlagSubmissionResult {
+	result := FlagSubmissionResult{
+		SuccessfullySent: make([]string, 0),
+		RetryableFlags:   make([]string, 0),
+		OverallSuccess:   false,
+	}
+	
+	fmt.Printf("Sending %d flags via HTTP to %s...\n", len(flags), ad_agent.URL)
 	
 	// Track if we successfully sent at least one flag or batch
 	successfullySent := false
@@ -564,13 +745,13 @@ func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
 	// If NUMBER_OF_FLAGS_TO_SEND_AT_ONCE is greater than 1, send flags in batches
 	if ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE > 1 {
 		// Send flags in chunks
-		for i := 0; i < len(uniqueFlags); i += ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE {
+		for i := 0; i < len(flags); i += ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE {
 			end := i + ad_agent.NUMBER_OF_FLAGS_TO_SEND_AT_ONCE
-			if end > len(uniqueFlags) {
-				end = len(uniqueFlags)
+			if end > len(flags) {
+				end = len(flags)
 			}
 			
-			flagsChunk := uniqueFlags[i:end]
+			flagsChunk := flags[i:end]
 			
 			// Prepare request body with flags array
 			reqBody := map[string][]string{
@@ -625,7 +806,7 @@ func sendFlagsToCheckSystem(flags []string) FlagSubmissionResult {
 		}
 	} else {
 		// Send flags one by one
-		for _, flag := range uniqueFlags {
+		for _, flag := range flags {
 			// Prepare request body with single flag
 			reqBody := map[string]string{
 				ad_agent.FLAG_KEY: flag,
