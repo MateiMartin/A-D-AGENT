@@ -1,8 +1,7 @@
 services:
   ad-agent:
     build: .
-    ports:
-      - "1337:1337"
+    network_mode: "host"  # Use host network to reach external machines
     volumes:
       # Mount flags.txt to host for persistence
       - ./flags.txt:/app/flags.txt
