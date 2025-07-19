@@ -24,10 +24,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o backend/main back
 # Final runtime stage
 FROM python:3.11-alpine
 
-# Install runtime dependencies
+# Install runtime dependencies including network tools
 RUN apk add --no-cache \
     ca-certificates \
     netcat-openbsd \
+    curl \
+    wget \
+    iputils \
+    iproute2 \
+    bind-tools \
     && rm -rf /var/cache/apk/*
 
 # Create app directory

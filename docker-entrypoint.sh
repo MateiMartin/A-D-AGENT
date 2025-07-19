@@ -11,11 +11,16 @@ echo "📁 Created flags.txt file for logging found flags"
 mkdir -p /app/tmp
 echo "📂 Created tmp directory for exploit scripts"
 
-# Debug: List the file structure
+# Debug: List the file structure and network info
 echo "📋 File structure check:"
 echo "  - Frontend dist: $(ls -la /app/frontend/dist/ 2>/dev/null | wc -l) files"
 echo "  - Assets folder: $(ls -la /app/frontend/dist/assets/ 2>/dev/null | wc -l) files"
 echo "  - Backend binary: $(ls -la /app/backend/main 2>/dev/null && echo "✅ Found" || echo "❌ Missing")"
+
+echo "🌐 Network diagnostics:"
+echo "  - Container IP: $(hostname -i 2>/dev/null || echo "N/A")"
+echo "  - DNS servers: $(cat /etc/resolv.conf | grep nameserver | head -3 || echo "N/A")"
+echo "  - Default route: $(ip route show default 2>/dev/null | head -1 || echo "N/A")"
 
 # Start the backend server (which now serves both API and frontend)
 echo "🔧 Starting A-D-AGENT server on port 1337..."

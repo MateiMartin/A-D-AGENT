@@ -547,7 +547,17 @@ func sendFlagViaNetcat(flag string) error {
 	// Set up connection with timeout
 	conn, err := net.DialTimeout("tcp", address, time.Duration(ad_agent.NETCAT_TIMEOUT)*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to connect to %s: %v", address, err)
+		// Provide more detailed error messages for common VPN/network issues
+		if strings.Contains(err.Error(), "connection refused") {
+			return fmt.Errorf("connection refused to %s - CTF flag server may be down or VPN not connected", address)
+		}
+		if strings.Contains(err.Error(), "no route to host") {
+			return fmt.Errorf("no route to host %s - check VPN connection and routing", address)
+		}
+		if strings.Contains(err.Error(), "timeout") {
+			return fmt.Errorf("connection timeout to %s - check VPN latency and firewall settings", address)
+		}
+		return fmt.Errorf("failed to connect to %s: %v (check VPN and network configuration)", address, err)
 	}
 	defer conn.Close()
 	
@@ -782,7 +792,16 @@ func sendFlagsViaHTTP(flags []string) FlagSubmissionResult {
 			
 			resp, err := client.Do(req)
 			if err != nil {
-				fmt.Printf("Error sending flags chunk to check system: %v\n", err)
+				// Provide more detailed error messages for common VPN/network issues
+				errorMsg := fmt.Sprintf("Error sending flags chunk to check system: %v", err)
+				if strings.Contains(err.Error(), "connection refused") {
+					errorMsg += " - CTF submission server may be down or VPN not connected"
+				} else if strings.Contains(err.Error(), "no route to host") {
+					errorMsg += " - check VPN connection and routing"
+				} else if strings.Contains(err.Error(), "timeout") {
+					errorMsg += " - check VPN latency and firewall settings"
+				}
+				fmt.Println(errorMsg)
 				// Add all flags in this chunk to retryable flags
 				result.RetryableFlags = append(result.RetryableFlags, flagsChunk...)
 				continue
@@ -834,7 +853,16 @@ func sendFlagsViaHTTP(flags []string) FlagSubmissionResult {
 			
 			resp, err := client.Do(req)
 			if err != nil {
-				fmt.Printf("Error sending flag to check system: %v\n", err)
+				// Provide more detailed error messages for common VPN/network issues
+				errorMsg := fmt.Sprintf("Error sending flag to check system: %v", err)
+				if strings.Contains(err.Error(), "connection refused") {
+					errorMsg += " - CTF submission server may be down or VPN not connected"
+				} else if strings.Contains(err.Error(), "no route to host") {
+					errorMsg += " - check VPN connection and routing"
+				} else if strings.Contains(err.Error(), "timeout") {
+					errorMsg += " - check VPN latency and firewall settings"
+				}
+				fmt.Println(errorMsg)
 				result.RetryableFlags = append(result.RetryableFlags, flag)
 				continue
 			}
@@ -894,10 +922,72 @@ func getStatistics(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// testNetworkConnectivity tests if the container can reach the CTF infrastructure
+func testNetworkConnectivity() {
+	fmt.Println("🔍 Testing network connectivity...")
+	
+	// Test HTTP connectivity if configured
+	if ad_agent.SUBMISSION_METHOD == "http" || ad_agent.SUBMISSION_METHOD == "both" {
+		fmt.Printf("Testing HTTP connectivity to: %s\n", ad_agent.URL)
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(ad_agent.URL)
+		if err != nil {
+			fmt.Printf("❌ HTTP connectivity test failed: %v\n", err)
+			fmt.Println("   Check your VPN connection and URL configuration")
+		} else {
+			resp.Body.Close()
+			fmt.Printf("✅ HTTP connectivity successful (status: %d)\n", resp.StatusCode)
+		}
+	}
+	
+	// Test netcat connectivity if configured
+	if ad_agent.SUBMISSION_METHOD == "netcat" || ad_agent.SUBMISSION_METHOD == "both" {
+		fmt.Printf("Testing netcat connectivity to: %s:%d\n", ad_agent.NETCAT_HOST, ad_agent.NETCAT_PORT)
+		address := net.JoinHostPort(ad_agent.NETCAT_HOST, strconv.Itoa(ad_agent.NETCAT_PORT))
+		conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+		if err != nil {
+			fmt.Printf("❌ Netcat connectivity test failed: %v\n", err)
+			fmt.Println("   Check your VPN connection and netcat configuration")
+		} else {
+			conn.Close()
+			fmt.Printf("✅ Netcat connectivity successful\n")
+		}
+	}
+	
+	fmt.Println("Network connectivity test completed")
+}
+
+// logNetworkInfo logs current network configuration for debugging
+func logNetworkInfo() {
+	fmt.Println("🌐 Network Configuration:")
+	fmt.Printf("   Submission method: %s\n", ad_agent.SUBMISSION_METHOD)
+	
+	if ad_agent.SUBMISSION_METHOD == "http" || ad_agent.SUBMISSION_METHOD == "both" {
+		fmt.Printf("   HTTP URL: %s\n", ad_agent.URL)
+		fmt.Printf("   HTTP headers: %d configured\n", len(ad_agent.HEADERS))
+	}
+	
+	if ad_agent.SUBMISSION_METHOD == "netcat" || ad_agent.SUBMISSION_METHOD == "both" {
+		fmt.Printf("   Netcat host: %s\n", ad_agent.NETCAT_HOST)
+		fmt.Printf("   Netcat port: %d\n", ad_agent.NETCAT_PORT)
+		fmt.Printf("   Netcat timeout: %ds\n", ad_agent.NETCAT_TIMEOUT)
+		fmt.Printf("   Netcat format: %s\n", ad_agent.NETCAT_FORMAT)
+	}
+}
+
 func main() {
 	// Set up the project root path for tmp directory
 	projectRootPath = getProjectRootPath()
 	fmt.Printf("Project root path: %s\n", projectRootPath)
+	
+	// Log network configuration
+	logNetworkInfo()
+	
+	// Test network connectivity after a brief startup delay
+	go func() {
+		time.Sleep(3 * time.Second) // Allow container networking to stabilize
+		testNetworkConnectivity()
+	}()
 	
 	// Ensure the tmp directory exists at project root
 	tmpDir := filepath.Join(projectRootPath, "tmp")

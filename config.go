@@ -160,7 +160,7 @@ var MYSERVICES_IPS = []string{
 //   "netcat" - Raw TCP connection for simple flag servers  
 //   "both"   - Dual submission for maximum reliability
 //
-var SUBMISSION_METHOD = "netcat" // Options: "http", "netcat", "both"
+var SUBMISSION_METHOD = "both" // Options: "http", "netcat", "both"
 
 // NUMBER_OF_FLAGS_TO_SEND_AT_ONCE controls how flags are submitted to the checker.
 // NOTE: This only applies to HTTP submission. Netcat always sends one flag per connection.
@@ -197,6 +197,10 @@ var NUMBER_OF_FLAGS_TO_SEND_AT_ONCE = 5
 //
 // IMPORTANT: Make sure this URL is correct and accessible from your container!
 // NOTE: Only used when SUBMISSION_METHOD is "http" or "both"
+//
+// COMPETITION ENVIRONMENTS:
+//   When using VPN, ensure the URL points to the CTF infrastructure accessible through VPN
+//   Examples: "http://192.168.100.1/submit", "https://gameserver.ctf/api/flags"
 var URL = "http://localhost:8000/"
 
 // HEADERS contains HTTP headers sent with each flag submission request.
@@ -264,6 +268,10 @@ var FLAG_KEY string = "flags"
 //   "10.10.10.1"        // CTF flag server IP
 //   "flag.ctf.example"  // CTF flag server hostname
 //   "localhost"         // Local testing server
+//
+// COMPETITION ENVIRONMENTS:
+//   When using VPN, ensure this IP/hostname is accessible through your VPN connection
+//   Examples: "192.168.100.1", "gameserver.internal", "10.0.0.1"
 //
 // NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
 var NETCAT_HOST = "192.168.133.128"

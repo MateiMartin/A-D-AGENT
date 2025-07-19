@@ -1,7 +1,9 @@
 services:
   ad-agent:
     build: .
-    network_mode: "host"  # Use host network to reach external machines
+    # Use host networking for VPN compatibility in competition environments
+    # This allows the container to use the host's network stack and VPN connection
+    network_mode: "host"
     volumes:
       # Mount flags.txt to host for persistence
       - ./flags.txt:/app/flags.txt
@@ -12,9 +14,34 @@ services:
       - PORT=1337
     restart: unless-stopped
     container_name: ad-agent
+    # Add privileged mode for advanced networking capabilities
+    privileged: true
+    # DNS configuration for better name resolution in CTF environments
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      # Allow container to reach host network
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:1337/api/services"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Alternative service for bridge networking (comment out above and uncomment this for testing)
+  # ad-agent-bridge:
+  #   build: .
+  #   ports:
+  #     - "1337:1337"
+  #   volumes:
+  #     - ./flags.txt:/app/flags.txt
+  #     - ./tmp:/app/tmp
+  #   environment:
+  #     - GIN_MODE=release
+  #     - PORT=1337
+  #   restart: unless-stopped
+  #   container_name: ad-agent-bridge
+  #   # For bridge mode, you may need to configure routing manually:
+  #   # docker exec ad-agent-bridge ip route add [CTF_NETWORK] via [VPN_GATEWAY]
