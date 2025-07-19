@@ -160,7 +160,7 @@ var MYSERVICES_IPS = []string{
 //   "netcat" - Raw TCP connection for simple flag servers  
 //   "both"   - Dual submission for maximum reliability
 //
-var SUBMISSION_METHOD = "http" // Options: "http", "netcat", "both"
+var SUBMISSION_METHOD = "netcat" // Options: "http", "netcat", "both"
 
 // NUMBER_OF_FLAGS_TO_SEND_AT_ONCE controls how flags are submitted to the checker.
 // NOTE: This only applies to HTTP submission. Netcat always sends one flag per connection.
@@ -266,7 +266,7 @@ var FLAG_KEY string = "flags"
 //   "localhost"         // Local testing server
 //
 // NOTE: Only used when SUBMISSION_METHOD is "netcat" or "both"
-var NETCAT_HOST = "10.10.10.1"
+var NETCAT_HOST = "192.168.133.128"
 
 // NETCAT_PORT is the port number of the flag submission server.
 //
