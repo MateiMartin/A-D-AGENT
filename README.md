@@ -432,6 +432,94 @@ docker cp ad-agent:/app/flags.txt ./backup_flags.txt
 docker cp ad-agent:/app/tmp ./backup_exploits
 ```
 
+## 🛠️ Development Process
+
+A-D-AGENT follows a modular, containerized development approach designed for rapid iteration and easy customization. Whether you want to understand the internals, add new features, or contribute to the project, this section will guide you through the development workflow.
+
+### **Architecture Overview**
+
+A-D-AGENT uses a **full-stack containerized architecture** with clean separation of concerns:
+
+- **Frontend**: React 18 + Vite + Monaco Editor (VS Code-like interface)
+- **Backend**: Go + Gin Framework (concurrent exploit execution & flag management)
+- **Runtime**: Python 3.11 (exploit execution environment)
+- **Configuration**: Single `config.go` file (no database dependencies)
+
+The system is designed for **real-time operation** with concurrent exploit execution, automatic flag detection, and multiple submission methods.
+
+### **Development Workflow**
+
+1. **Local Development Setup**:
+   ```bash
+   git clone https://github.com/MateiMartin/A-D-AGENT.git
+   cd A-D-AGENT
+   
+   # Make configuration changes
+   nano config.go
+   
+   # Build and run
+   ./start.sh  # Rebuilds container automatically
+   ```
+
+2. **Component Development**:
+   - **Frontend changes**: Modify files in `frontend/src/`, container auto-rebuilds
+   - **Backend changes**: Edit `backend/main.go`, rebuild with `./start.sh`
+   - **Configuration**: Update `config.go` for new features or CTF requirements
+
+3. **Testing & Debugging**:
+   ```bash
+   # View real-time logs
+   docker logs -f ad-agent
+   
+   # Debug specific components
+   docker exec -it ad-agent /bin/bash
+   
+   # Test exploit execution manually
+   docker exec -it ad-agent python /app/tmp/exploit_Service1_test.py 10.10.1.10
+   ```
+
+### **Key Development Areas**
+
+- **Exploit Execution Engine**: Concurrent Python process management with timeout handling
+- **Flag Detection System**: Regex-based flag extraction and deduplication
+- **Multi-method Submission**: HTTP and TCP-based flag submission with retry logic
+- **Real-time Statistics**: Live dashboard with WebSocket-like updates
+- **AI Integration**: OpenAI-powered code improvement and optimization
+
+### **Customization & Extensions**
+
+A-D-AGENT is designed to be easily customizable for different CTF environments:
+
+- **Custom Submission Methods**: Add new flag submission protocols
+- **Enhanced UI Components**: Extend the Monaco editor with custom features
+- **Advanced Analytics**: Add new statistics and monitoring capabilities
+- **Integration Hooks**: Connect with external tools (Slack, Discord, dashboards)
+
+### **Technical Documentation**
+
+For comprehensive technical details, architecture deep-dives, and advanced development topics, see **[DEVELOPMENT.md](DEVELOPMENT.md)**:
+
+- 🏗️ **Detailed Architecture**: Component interaction diagrams and data flow
+- 📁 **Codebase Structure**: Complete file organization and responsibility mapping  
+- 🔧 **Backend Deep-dive**: Go concurrency patterns and exploit execution engine
+- 🎨 **Frontend Architecture**: React component hierarchy and state management
+- 🐳 **Container Build Process**: Multi-stage Docker optimization and deployment
+- 🧪 **Testing Strategies**: Unit testing, integration testing, and debugging approaches
+- 🚀 **Deployment Patterns**: Production deployment, scaling, and monitoring
+- 🔌 **API Reference**: Complete REST API documentation and WebSocket endpoints
+
+### **Contributing**
+
+A-D-AGENT welcomes contributions! Whether you're fixing bugs, adding features, or improving documentation:
+
+1. **Read [DEVELOPMENT.md](DEVELOPMENT.md)** for technical architecture details
+2. **Fork and create feature branches** for your changes
+3. **Test thoroughly** in container environment  
+4. **Follow Go and React best practices** established in the codebase
+5. **Update documentation** for any new features or configuration options
+
+The codebase is designed to be approachable for both CTF participants and software developers, with clear separation of concerns and extensive inline documentation.
+
 ---
 
 **A-D-AGENT**: The ultimate automated Attack & Defense tool for CTF competitions! 🎯
