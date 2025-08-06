@@ -1,6 +1,10 @@
 # A-D-AGENT Development Guide 🛠️
 
-This document provides a comprehensive technical overview of A-D-AGENT's architecture, codebase structure, and development workflow for developers who want to understand, modify, or contribute to the project.
+This document provides a comprehensive tec├── 🗂️ tmp/                         # Runtime exploit files (created dynamically)
+├── 📄 flags.txt                    # Captured flags log (created at runtime)
+│
+├── 📄 start.sh, start.bat          # Application startup scripts  
+└── 📄 cleanup.sh, cleanup.bat      # Cleanup scripts overview of A-D-AGENT's architecture, codebase structure, and development workflow for developers who want to understand, modify, or contribute to the project.
 
 ## 🏗️ Architecture Overview
 
@@ -32,33 +36,45 @@ A-D-AGENT follows a **full-stack containerized architecture** with clear separat
 ```
 A-D-AGENT/
 ├── 📄 config.go                    # Main configuration file
-├── 📄 go.mod, go.sum               # Go dependencies
+├── 📄 go.mod, go.sum               # Go dependencies (module: ad_agent)
 ├── 📄 Dockerfile                   # Multi-stage container build
 ├── 📄 docker-compose.yml           # Container orchestration
 ├── 📄 docker-entrypoint.sh         # Container startup script
+├── 📄 .dockerignore                # Docker ignore file
+├── 📄 LICENSE                      # Project license
 │
 ├── 🗂️ backend/
-│   └── 📄 main.go                  # Go backend server (776 lines)
+│   ├── 📄 main.go                  # Go backend server (776+ lines)
+│   └── 📄 main                     # Compiled Go binary (created at build)
 │
 ├── 🗂️ frontend/
 │   ├── 📄 package.json             # Frontend dependencies
+│   ├── 📄 package-lock.json        # NPM lock file
 │   ├── 📄 vite.config.js           # Vite build configuration
+│   ├── 📄 eslint.config.js         # ESLint configuration
 │   ├── 📄 index.html               # HTML entry point
+│   ├── 📄 .gitignore               # Frontend gitignore
+│   │
+│   ├── 🗂️ public/
+│   │   └── 📄 vite.svg             # Vite logo
 │   │
 │   └── 🗂️ src/
 │       ├── 📄 main.jsx             # React app entry point
-│       ├── 📄 App.jsx              # Main application component (394 lines)
+│       ├── 📄 App.jsx              # Main application component
 │       ├── 📄 App.css              # Global styles & VS Code theme
 │       ├── 📄 index.css            # Base CSS & variables
 │       │
-│       └── 🗂️ components/
+│       ├── 🗂️ assets/
+│       │   └── � react.svg        # React logo
+│       │
+│       └── �🗂️ components/
 │           ├── 📄 Explorer.jsx          # File explorer sidebar
 │           ├── 📄 FileList.jsx          # File listing component
 │           ├── 📄 NewFileForm.jsx       # New file creation form
 │           ├── 📄 CodeEditor.jsx        # Monaco editor wrapper
-│           ├── 📄 RunCodeModal.jsx      # Code execution modal (250 lines)
-│           ├── 📄 AIRewriteModal.jsx    # AI code improvement modal (198 lines)
-│           ├── 📄 Statistics.jsx        # Statistics dashboard (209 lines)
+│           ├── 📄 RunCodeModal.jsx      # Code execution modal
+│           ├── 📄 AIRewriteModal.jsx    # AI code improvement modal
+│           ├── 📄 Statistics.jsx        # Statistics dashboard
 │           ├── 📄 Statistics.css        # Statistics styling
 │           └── 📄 ConfirmationModal.jsx # Confirmation dialogs
 │
@@ -68,7 +84,7 @@ A-D-AGENT/
 ├── 🗂️ tmp/                         # Runtime exploit files (created dynamically)
 ├── 📄 flags.txt                    # Captured flags log (created at runtime)
 │
-└── 🗂️ Scripts/
+└── � Scripts/
     ├── 📄 start.sh, start.bat      # Application startup scripts
     └── 📄 cleanup.sh, cleanup.bat  # Cleanup scripts
 ```

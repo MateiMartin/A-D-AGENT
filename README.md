@@ -209,6 +209,179 @@ while True:
     time.sleep(10)  # Check every 10 seconds
 ```
 
+**Advanced Multithreaded Python Example:**
+
+```python
+#!/usr/bin/env python3
+import requests
+import time
+import threading
+import queue
+import os
+from datetime import datetime
+
+class FlagSubmitter:
+    def __init__(self, max_workers=5):
+        self.max_workers = max_workers
+        self.flag_queue = queue.Queue()
+        self.last_position = 0
+        self.total_submitted = 0
+        self.total_failed = 0
+        self.lock = threading.Lock()
+        
+    def read_new_flags(self, filename="flags.txt"):
+        """Read only new flags since last check"""
+        try:
+            if not os.path.exists(filename):
+                return []
+                
+            with open(filename, 'r') as f:
+                f.seek(self.last_position)
+                new_content = f.read()
+                self.last_position = f.tell()
+                
+            # Extract flags from new content
+            new_flags = [line.strip() for line in new_content.split('\n') if line.strip()]
+            
+            if new_flags:
+                print(f"📖 Read {len(new_flags)} new flags from {filename}")
+                for flag in new_flags:
+                    print(f"   📋 Flag queued: {flag[:20]}...")
+                    
+            return new_flags
+            
+        except Exception as e:
+            print(f"❌ Error reading flags file: {e}")
+            return []
+
+    def submit_custom_flag(self, flag):
+        """Your custom submission logic here"""
+        try:
+            print(f"🚀 Submitting flag: {flag[:20]}...")
+            
+            # Example custom submission (replace with your logic)
+            response = requests.post(
+                "https://your-ctf-platform.com/submit",
+                json={"flag": flag},
+                headers={
+                    "Authorization": "Bearer your-token",
+                    "Content-Type": "application/json"
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                print(f"✅ Successfully submitted: {flag[:20]}...")
+                return True
+            else:
+                print(f"❌ Failed to submit {flag[:20]}... - Status: {response.status_code}")
+                print(f"   Response: {response.text[:100]}")
+                return False
+                
+        except Exception as e:
+            print(f"💥 Exception submitting {flag[:20]}...: {e}")
+            return False
+
+    def worker(self):
+        """Worker thread for processing flags"""
+        while True:
+            try:
+                flag = self.flag_queue.get(timeout=1)
+                if flag is None:  # Shutdown signal
+                    break
+                    
+                success = self.submit_custom_flag(flag)
+                
+                with self.lock:
+                    if success:
+                        self.total_submitted += 1
+                    else:
+                        self.total_failed += 1
+                    
+                self.flag_queue.task_done()
+                
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"💥 Worker error: {e}")
+
+    def start_workers(self):
+        """Start worker threads"""
+        print(f"🔧 Starting {self.max_workers} worker threads...")
+        self.workers = []
+        for i in range(self.max_workers):
+            worker = threading.Thread(target=self.worker, name=f"FlagWorker-{i+1}")
+            worker.daemon = True
+            worker.start()
+            self.workers.append(worker)
+            
+    def stop_workers(self):
+        """Stop worker threads"""
+        print("🛑 Stopping worker threads...")
+        for _ in range(self.max_workers):
+            self.flag_queue.put(None)  # Shutdown signal
+            
+    def print_stats(self):
+        """Print current statistics"""
+        with self.lock:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"\n📊 [{timestamp}] Flag Submission Statistics:")
+            print(f"   ✅ Total submitted successfully: {self.total_submitted}")
+            print(f"   ❌ Total failed submissions: {self.total_failed}")
+            print(f"   ⏳ Queue size: {self.flag_queue.qsize()}")
+            if (self.total_submitted + self.total_failed) > 0:
+                success_rate = (self.total_submitted/(self.total_submitted+self.total_failed)*100)
+                print(f"   📈 Success rate: {success_rate:.1f}%")
+            else:
+                print("   📈 Success rate: N/A")
+
+def main():
+    print("🚩 A-D-AGENT Custom Flag Submitter Starting...")
+    print("=" * 50)
+    
+    submitter = FlagSubmitter(max_workers=3)  # 3 concurrent submission threads
+    submitter.start_workers()
+    
+    try:
+        stats_counter = 0
+        while True:
+            # Read new flags from A-D-AGENT
+            new_flags = submitter.read_new_flags()
+            
+            # Add flags to submission queue
+            for flag in new_flags:
+                submitter.flag_queue.put(flag)
+                
+            # Print stats every 30 seconds (3 cycles)
+            stats_counter += 1
+            if stats_counter >= 3:
+                submitter.print_stats()
+                stats_counter = 0
+                
+            time.sleep(10)  # Check every 10 seconds
+            
+    except KeyboardInterrupt:
+        print("\n🛑 Shutdown requested by user...")
+    except Exception as e:
+        print(f"💥 Main loop error: {e}")
+    finally:
+        submitter.stop_workers()
+        submitter.print_stats()
+        print("👋 Flag submitter stopped.")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Multithreaded Features:**
+- **🧵 Concurrent Processing**: 3-5 worker threads for parallel flag submission
+- **📊 Real-time Statistics**: Detailed success/failure tracking with timestamps
+- **📝 Rich Logging**: Color-coded emoji status messages for easy monitoring
+- **🔄 Queue Management**: Thread-safe flag queuing and processing
+- **⚡ Non-blocking Operation**: Continues reading new flags while submitting previous ones
+- **🛡️ Error Handling**: Robust exception handling with detailed error messages
+- **📈 Performance Metrics**: Success rate calculation and queue size monitoring
+
 **Use Cases:**
 - Complex authentication (OAuth, SAML, multi-step auth)
 - Legacy systems (Telnet, SSH-based submission)  
