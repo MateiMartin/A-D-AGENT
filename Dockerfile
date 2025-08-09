@@ -1,4 +1,3 @@
-
 # Multi-stage Dockerfile for A-D-AGENT
 FROM node:18-alpine AS frontend-builder
 
@@ -25,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o backend/main back
 # Final runtime stage
 FROM python:3.11-alpine
 
-# Install runtime dependencies including network tools
+# Install runtime dependencies including network tools and build dependencies for Python packages
 RUN apk add --no-cache \
     ca-certificates \
     netcat-openbsd \
@@ -34,6 +33,10 @@ RUN apk add --no-cache \
     iputils \
     iproute2 \
     bind-tools \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
     && rm -rf /var/cache/apk/*
 
 # Create app directory
@@ -56,7 +59,14 @@ RUN mkdir -p /app/tmp /app/logs
 RUN touch /app/flags.txt && chmod 666 /app/flags.txt
 
 # Install Python dependencies commonly used in exploits
-RUN pip install --no-cache-dir requests pycryptodome beautifulsoup4 urllib3 pwntools
+# Install them separately to better handle potential failures
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir requests beautifulsoup4 urllib3
+RUN pip install --no-cache-dir pycryptodome
+RUN pip install --no-cache-dir pwntools || echo "Warning: pwntools installation failed, continuing without it"
+
+# Remove build dependencies to reduce image size
+RUN apk del gcc musl-dev libffi-dev openssl-dev
 
 # Expose port 1337
 EXPOSE 1337
