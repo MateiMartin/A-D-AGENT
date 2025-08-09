@@ -320,10 +320,10 @@ var NETCAT_FORMAT = "flag_newline"
 // For edge cases where HTTP and netcat methods don't meet your CTF requirements,
 // you can create custom flag submission scripts that read from flags.txt.
 //
-// A-D-AGENT logs all captured flags to flags.txt in simple newline format:
-//   CTF{flag1}
-//   CTF{flag2}
-//   CTF{flag3}
+// A-D-AGENT logs all captured flags to flags.txt with timestamp and metadata:
+//   [2006-01-02 15:04:05] CTF{flag1} (from 10.10.1.10 - WebService)
+//   [2006-01-02 15:04:06] CTF{flag2} (from 10.10.2.10 - DatabaseService)
+//   [2006-01-02 15:04:07] CTF{flag3} (from 10.10.3.10 - SSHService)
 //
 // EXAMPLES OF CUSTOM REQUIREMENTS:
 //   - Complex authentication protocols (OAuth, SAML, multi-step auth)

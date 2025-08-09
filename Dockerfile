@@ -24,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o backend/main back
 # Final runtime stage
 FROM python:3.11-alpine
 
-# Install runtime dependencies including network tools
+# Install runtime dependencies including network tools and pwntools requirements
 RUN apk add --no-cache \
     ca-certificates \
     netcat-openbsd \
@@ -33,6 +33,11 @@ RUN apk add --no-cache \
     iputils \
     iproute2 \
     bind-tools \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    python3-dev \
     && rm -rf /var/cache/apk/*
 
 # Create app directory
@@ -55,7 +60,17 @@ RUN mkdir -p /app/tmp /app/logs
 RUN touch /app/flags.txt && chmod 666 /app/flags.txt
 
 # Install Python dependencies commonly used in exploits
-RUN pip install --no-cache-dir requests pycryptodome beautifulsoup4 urllib3
+RUN pip install --no-cache-dir \
+    requests \
+    pycryptodome \
+    beautifulsoup4 \
+    urllib3 \
+    pwntools \
+    paramiko \
+    scapy \
+    cryptography \
+    z3-solver \
+    pillow
 
 # Expose port 1337
 EXPOSE 1337

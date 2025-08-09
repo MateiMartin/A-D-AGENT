@@ -185,7 +185,21 @@ def read_new_flags(filename="flags.txt", last_position=0):
             new_content = f.read()
             new_position = f.tell()
         
-        new_flags = [line.strip() for line in new_content.splitlines() if line.strip()]
+        # Parse flags from A-D-AGENT format: [timestamp] FLAG (from IP - Service)
+        import re
+        flag_pattern = r'\[(.*?)\] (CTF\{[^}]+\}|flag\{[^}]+\}|[A-Z0-9]{32})'
+        new_flags = []
+        for line in new_content.splitlines():
+            if line.strip():
+                match = re.search(flag_pattern, line)
+                if match:
+                    new_flags.append(match.group(2))
+                else:
+                    # Fallback for simple format
+                    stripped = line.strip()
+                    if stripped and (stripped.startswith('CTF{') or stripped.startswith('flag{') or re.match(r'^[A-Z0-9]{32}$', stripped)):
+                        new_flags.append(stripped)
+        
         return new_flags, new_position
     except FileNotFoundError:
         return [], 0
@@ -228,8 +242,7 @@ class FlagSubmitter:
         self.total_submitted = 0
         self.total_failed = 0
         self.lock = threading.Lock()
-        
-    def read_new_flags(self, filename="flags.txt"):
+          def read_new_flags(self, filename="flags.txt"):
         """Read only new flags since last check"""
         try:
             if not os.path.exists(filename):
@@ -240,8 +253,20 @@ class FlagSubmitter:
                 new_content = f.read()
                 self.last_position = f.tell()
                 
-            # Extract flags from new content
-            new_flags = [line.strip() for line in new_content.split('\n') if line.strip()]
+            # Parse flags from A-D-AGENT format: [timestamp] FLAG (from IP - Service)
+            import re
+            flag_pattern = r'\[(.*?)\] (CTF\{[^}]+\}|flag\{[^}]+\}|[A-Z0-9]{32})'
+            new_flags = []
+            for line in new_content.split('\n'):
+                if line.strip():
+                    match = re.search(flag_pattern, line)
+                    if match:
+                        new_flags.append(match.group(2))
+                    else:
+                        # Fallback for simple format
+                        stripped = line.strip()
+                        if stripped and (stripped.startswith('CTF{') or stripped.startswith('flag{') or re.match(r'^[A-Z0-9]{32}$', stripped)):
+                            new_flags.append(stripped)
             
             if new_flags:
                 print(f"📖 Read {len(new_flags)} new flags from {filename}")

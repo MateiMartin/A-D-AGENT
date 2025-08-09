@@ -262,18 +262,21 @@ For complex CTF platforms requiring custom submission protocols, A-D-AGENT provi
 #### **1. Flag File Access**
 
 ```go
-// A-D-AGENT writes all captured flags to flags.txt in simple format:
-// CTF{flag1}
-// CTF{flag2}
-// CTF{flag3}
-func logFlagToFile(flag string) {
+// A-D-AGENT writes all captured flags to flags.txt with timestamp and metadata:
+// [2006-01-02 15:04:05] CTF{flag1} (from 10.10.1.10 - WebService)
+// [2006-01-02 15:04:06] CTF{flag2} (from 10.10.2.10 - DatabaseService)
+// [2006-01-02 15:04:07] CTF{flag3} (from 10.10.3.10 - SSHService)
+func logFlagToFile(flag, ip, service string) {
     file, err := os.OpenFile("flags.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
     if err != nil {
         fmt.Printf("Error opening flags file: %v\n", err)
         return
     }
     defer file.Close()
-    file.WriteString(fmt.Sprintf("%s\n", flag))
+    
+    timestamp := time.Now().Format("2006-01-02 15:04:05")
+    logEntry := fmt.Sprintf("[%s] %s (from %s - %s)\n", timestamp, flag, ip, service)
+    file.WriteString(logEntry)
 }
 ```
 
@@ -287,7 +290,17 @@ def read_new_flags(filename="flags.txt", last_position=0):
             f.seek(last_position)
             new_content = f.read()
             new_position = f.tell()
-        new_flags = [line.strip() for line in new_content.splitlines() if line.strip()]
+        
+        # Parse flags from A-D-AGENT format: [timestamp] FLAG (from IP - Service)
+        import re
+        flag_pattern = r'\[(.*?)\] (CTF\{[^}]+\}|flag\{[^}]+\}|[A-Z0-9]{32})'
+        new_flags = []
+        for line in new_content.splitlines():
+            if line.strip():
+                match = re.search(flag_pattern, line)
+                if match:
+                    new_flags.append(match.group(2))
+        
         return new_flags, new_position
     except FileNotFoundError:
         return [], 0
