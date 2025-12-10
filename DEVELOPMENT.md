@@ -12,7 +12,7 @@ A-D-AGENT follows a **full-stack containerized architecture** with clear separat
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React Frontend │◄──►│   Go Backend     │◄──►│  File System    │
+│   React Frontend│◄──►│   Go Backend     │◄──►│  File System    │
 │   (Port 1337)   │    │  (Gin Router)    │    │  (tmp/, flags)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
